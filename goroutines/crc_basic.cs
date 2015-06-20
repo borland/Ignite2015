@@ -10,14 +10,13 @@ class crc_basic
 	}
 
 	static void ScanDir(string dir) {
-		var files = Directory.GetFileSystemEntries(dir, "*.*", SearchOption.AllDirectories);
-		foreach(var f in files) {
-			if(Directory.Exists(f))
-				continue;
-
+		foreach(var f in Directory.GetFiles(dir)) {
 			var absPath = Path.Combine(dir, f);
 			var val = CalcCrc32(absPath);
-			Console.WriteLine("Got crc {0} for {1}", val, absPath);
+			Console.WriteLine($"Got crc {val} for {absPath}");
+		}
+		foreach(var d in Directory.GetDirectories(dir)) {
+			ScanDir(Path.Combine(dir, d));
 		}
 	}
 
