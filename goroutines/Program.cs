@@ -1,12 +1,10 @@
 ﻿using System;
 
-namespace goroutines
+class MainClass
 {
-	class MainClass
+	public static void Main(string[] args)
 	{
-		public static void Main(string[] args)
-		{
-			
-		}
+		crc_basic.Run();
+//		crc_concurrent.Main();
 	}
 }
