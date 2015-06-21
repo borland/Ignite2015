@@ -3,44 +3,20 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 
-class Channel<T>{
-	readonly int m_bufferCapacity;
-	readonly Queue<T> m_buffer;
-
-	public Channel(int bufferSize = 0) {
-		m_bufferSize = bufferSize;
-		m_buffer = new Queue<T>(bufferSize);
-	}
-
-	public async void Send(T value) {
-		if(m_buffer.Count >= m_bufferCapacity) { // block
-			await receiver()(value);
-		} else { // buffer
-			m_buffer.Enqueue(value);
-		}
-	}
-
-	public T Receive() {
-		return default(T);
-	}
-
-	async Task<Action<T>> receiver() {
-		// if we have a receiver, return it
-		// if not, block until we do
-	}
-}
-
 struct CrcResult {
-	uint Value;
-	string Path;
+	public uint Value;
+	public string Path;
 }
 
 class crc_concurrent
 {
-	static uint CalcCrc32(string filePath, Channel<CrcResult> results, Channel<int> refCount) {
+	static async void CalcCrc32(string filePath, Channel<CrcResult> results, Channel<int> refCount) {
 		var buffer = File.ReadAllBytes(filePath);
-
-		return DamienG.Security.Cryptography.Crc32.Compute(buffer);
+		
+		await results.Send(new CrcResult {
+			Value = DamienG.Security.Cryptography.Crc32.Compute(buffer),
+			Path = filePath
+		});
 	}
 
 	static void ScanDir(string dir, Channel<CrcResult> results, Channel<int> refCount) {
@@ -54,11 +30,16 @@ class crc_concurrent
 		}
 	}
 
-	public static void Run()
+	public static async void Run()
 	{
 		var results = new Channel<CrcResult>();
 		var refCount = new Channel<int>(bufferSize: 1);
-		refCount.Send(1);
-		Task.Run(() => ScanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, refCount));
+		await refCount.Send(1);
+		await Task.Run(() => ScanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, refCount));
+
+		while(true) {
+			var r = await results.Receive();
+			Console.WriteLine($"Got {r.Value} for {r.Path}");
+		}
 	}
 }
