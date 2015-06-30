@@ -4,41 +4,83 @@ using System;
 
 public class Channel<T>{
 	readonly int m_bufferCapacity;
-	readonly Queue<T> m_buffer;
-	readonly Queue<TaskCompletionSource<T>> m_receivers = new Queue<TaskCompletionSource<T>>();
-
-	TaskCompletionSource<TaskCompletionSource<T>> m_receiverAvailableTcs = new TaskCompletionSource<TaskCompletionSource<T>>();
-	Task<TaskCompletionSource<T>> m_receiverAvailable = m_receiverAvailableTcs.Task;
+	readonly Queue<T> m_bufferQueue;
+	readonly Queue<TaskCompletionSource<T>> m_receiverQueue = new Queue<TaskCompletionSource<T>>();
+	readonly Queue<Tuple<T, TaskCompletionSource<bool>>> m_senderQueue = new Queue<Tuple<T, TaskCompletionSource<bool>>>();
 
 	public Channel(int bufferSize = 0) {
 		m_bufferCapacity = bufferSize;
-		m_buffer = new Queue<T>(bufferSize);
+		m_bufferQueue = new Queue<T>(bufferSize);
 	}
 
-	public async Task Send(T value) {
-		if(m_buffer.Count < m_bufferCapacity) {
-			//if we have buffer space, buffer it
-			m_buffer.Enqueue(value);
-		} else {
-			var tcs = await dequeueReceiever();
+	/* ——— send with buffer space
+	send()
+	 -> push a value into the buffer
+	 -> return a task which completes immediately
+
+	receive() then does
+	 -> pop a value off the buffer
+	 -> complete it
+
+	——— send with blocked receiver:
+	send()
+	 -> pop a value off the receiver queue
+	 -> complete it
+	 -> return a task which completes immediately
+
+	——— send with no receiver:
+	send()
+	 -> add a pair<value, task> to the send queue
+	 -> return the task which will complete later when someone receives
+	 
+	receive() then does
+	 -> pop a task off the send queue
+	 -> push the held value from before into it */
+	public Task Send(T value) {
+		if(m_bufferQueue.Count < m_bufferCapacity) {
+			m_bufferQueue.Enqueue(value);
+			return Task.FromResult(true);
+		} else if(m_receiverQueue.Count > 0) {
+			var tcs = m_receiverQueue.Dequeue();
 			tcs.SetResult(value);
+			return Task.FromResult(true);
+		} else { // we must block
+			var tcs = new TaskCompletionSource<bool>();
+			m_senderQueue.Enqueue(Tuple.Create(value, tcs));
+			return tcs.Task;
 		}
 	}
 
+	/* ——— receive with buffered data:
+	recieve()
+	 -> pop a value off the buffer
+	 -> return a task<T> which publishes that value immediately
+
+	——— receive with waiting sender:
+	receive()
+	 -> pop a pair<task,T> off the sender queue
+	 -> complete the task (unblocking the sender)
+	 -> return a task which completes immediately with the value
+
+	——— receive with no sender or buffer:
+	receive()
+	 -> add a task<T> to the receive queue
+	 -> return the task which will complete later when someone sends
+
+	send() then does
+	-> pop a task off the receive queue
+	-> complete it */
 	public Task<T> Receive() {
-		// if we have a buffered value, return it
-		if(m_buffer.Count > 0) {
-			return Task.FromResult(m_buffer.Dequeue());
-		} else {
-			// set a new receiever which will wait for a sender
-			return enqueueReceiver();
+		if(m_bufferQueue.Count > 0) { // if we have a buffered value, return it
+			return Task.FromResult(m_bufferQueue.Dequeue());
+		} else if(m_senderQueue.Count > 0) { // we have a blocked sender
+			var t = m_senderQueue.Dequeue();
+			t.Item2.SetResult(false);
+			return Task.FromResult(t.Item1);
+		} else { // we must block ourselves
+			var tcs = new TaskCompletionSource<T>();
+			m_receiverQueue.Enqueue(tcs);
+			return tcs.Task;
 		}
-	}
-
-	Task<TaskCompletionSource<T>> dequeueReceiever() {
-		return null;
-	}
-
-	Task<T> enqueueReceiver() {
 	}
 }
