@@ -3,6 +3,29 @@ using System.Threading.Tasks;
 using System;
 using System.Threading;
 
+public class Channel
+{
+	// await on this function
+	public static async Task Select<T1, T2>(
+		Channel<T1> c1, Action<T1> a1,
+		Channel<T1> c2, Action<T1> a2){
+
+		var cts = new CancellationTokenSource;
+
+		// hrm need some sort of global lock over all 3 channels
+		// so that we can cancel the receive on c1 when c2 arrives with a value
+		// but do so in a thread-safe way
+		var tasks = new[]{ c1.Receive(cts.Token), c2.Receive(cts.Token) };
+		await Task.WhenAny(tasks);
+		cts.Cancel();
+
+		if(tasks[0].IsCompleted)
+			a1(tasks[0].Result);
+		else if(tasks[1].IsCompleted) // hrm what if they both complete. OH NO
+			a1(tasks[1].Result);
+	}
+}
+
 public class Channel<T>
 {
 	readonly int m_bufferCapacity;
@@ -39,6 +62,12 @@ public class Channel<T>
 	receive() then does
 	 -> pop a task off the send queue
 	 -> push the held value from before into it */
+
+	/// <summary>
+	/// Send the specified value.
+	/// Await on this function.
+	/// </summary>
+	/// <param name="value">Value.</param>
 	public Task Send(T value)
 	{
 		lock(this) {
@@ -81,6 +110,11 @@ public class Channel<T>
 	send() then does
 	-> pop a task off the receive queue
 	-> complete it */
+
+	/// <summary>
+	/// Receive a value from the channel.
+	/// Await on this function
+	/// </summary>
 	public Task<T> Receive()
 	{
 		lock(this) {
