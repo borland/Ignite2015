@@ -1,14 +1,17 @@
 ﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using System;
+using System.Threading;
 
-public class Channel<T>{
+public class Channel<T>
+{
 	readonly int m_bufferCapacity;
 	readonly Queue<T> m_bufferQueue;
 	readonly Queue<TaskCompletionSource<T>> m_receiverQueue = new Queue<TaskCompletionSource<T>>();
 	readonly Queue<Tuple<T, TaskCompletionSource<bool>>> m_senderQueue = new Queue<Tuple<T, TaskCompletionSource<bool>>>();
 
-	public Channel(int bufferSize = 0) {
+	public Channel(int bufferSize = 0)
+	{
 		m_bufferCapacity = bufferSize;
 		m_bufferQueue = new Queue<T>(bufferSize);
 	}
@@ -36,18 +39,26 @@ public class Channel<T>{
 	receive() then does
 	 -> pop a task off the send queue
 	 -> push the held value from before into it */
-	public Task Send(T value) {
-		if(m_bufferQueue.Count < m_bufferCapacity) {
-			m_bufferQueue.Enqueue(value);
-			return Task.FromResult(true);
-		} else if(m_receiverQueue.Count > 0) {
-			var tcs = m_receiverQueue.Dequeue();
-			tcs.SetResult(value);
-			return Task.FromResult(true);
-		} else { // we must block
-			var tcs = new TaskCompletionSource<bool>();
-			m_senderQueue.Enqueue(Tuple.Create(value, tcs));
-			return tcs.Task;
+	public Task Send(T value)
+	{
+		lock(this) {
+			if(m_bufferQueue.Count < m_bufferCapacity) {
+				m_bufferQueue.Enqueue(value);
+				return Task.FromResult(true);
+			} else if(m_receiverQueue.Count > 0) {
+				var tcs = m_receiverQueue.Dequeue();
+				Monitor.Exit(this);
+				try {
+					tcs.SetResult(value);
+				} finally {
+					Monitor.Enter(this);
+				}
+				return Task.FromResult(true);
+			} else { // we must block
+				var tcs = new TaskCompletionSource<bool>();
+				m_senderQueue.Enqueue(Tuple.Create(value, tcs));
+				return tcs.Task;
+			}
 		}
 	}
 
@@ -70,17 +81,25 @@ public class Channel<T>{
 	send() then does
 	-> pop a task off the receive queue
 	-> complete it */
-	public Task<T> Receive() {
-		if(m_bufferQueue.Count > 0) { // if we have a buffered value, return it
-			return Task.FromResult(m_bufferQueue.Dequeue());
-		} else if(m_senderQueue.Count > 0) { // we have a blocked sender
-			var t = m_senderQueue.Dequeue();
-			t.Item2.SetResult(false);
-			return Task.FromResult(t.Item1);
-		} else { // we must block ourselves
-			var tcs = new TaskCompletionSource<T>();
-			m_receiverQueue.Enqueue(tcs);
-			return tcs.Task;
+	public Task<T> Receive()
+	{
+		lock(this) {
+			if(m_bufferQueue.Count > 0) { // if we have a buffered value, return it
+				return Task.FromResult(m_bufferQueue.Dequeue());
+			} else if(m_senderQueue.Count > 0) { // we have a blocked sender
+				var t = m_senderQueue.Dequeue();
+				Monitor.Exit(this);
+				try {
+					t.Item2.SetResult(false);
+				} finally {
+					Monitor.Enter(this);
+				}
+				return Task.FromResult(t.Item1);
+			} else { // we must block ourselves
+				var tcs = new TaskCompletionSource<T>();
+				m_receiverQueue.Enqueue(tcs);
+				return tcs.Task;
+			}
 		}
 	}
 }

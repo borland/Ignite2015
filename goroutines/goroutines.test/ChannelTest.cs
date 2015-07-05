@@ -31,13 +31,14 @@ public class Channel
 	}
 
 	[Test]
-	public void SendBlocking_1item()
+	public void SendAndReceiveBlocking_1item()
 	{
 		var c = new Channel<int>(bufferSize: 0);
 
 		var hits = new List<int>();
 		Task.Run(() => {
-			hits.Add(c.Receive().Result);
+			var x = c.Receive().Result;
+			hits.Add(x);
 		});
 
 		CollectionAssert.IsEmpty(hits);
@@ -45,15 +46,17 @@ public class Channel
 		CollectionAssert.AreEqual(new[]{ 1 }, hits);
 	}
 
+
 	[Test]
-	public void SendBlocking_Sequence()
+	public void SendAndReceiveBlocking_Sequence()
 	{
 		var c = new Channel<int>(bufferSize: 0);
 
 		var hits = new List<int>();
 		Task.Run(() => {
-			var result = c.Receive().Result;
-			hits.Add(result);
+			for(int i = 0; i< 5; i++) {
+				hits.Add(c.Receive().Result);
+			}
 		});
 
 		CollectionAssert.IsEmpty(hits);
@@ -62,6 +65,48 @@ public class Channel
 		c.Send(3).Wait();
 		c.Send(4).Wait();
 		c.Send(5).Wait();
+		CollectionAssert.AreEqual(new[]{ 1, 2, 3, 4, 5 }, hits);
+	}
+
+	[Test]
+	public void SendAndReceiveBlocking_ManyReceivers()
+	{
+		var c = new Channel<int>(bufferSize: 0);
+
+		var hits = new List<int>();
+		for(int i = 0; i< 5; i++) {
+			Task.Run(() => {
+				hits.Add(c.Receive().Result);
+			});
+		}
+
+		CollectionAssert.IsEmpty(hits);
+		c.Send(1).Wait();
+		c.Send(2).Wait();
+		c.Send(3).Wait();
+		c.Send(4).Wait();
+		c.Send(5).Wait();
+		CollectionAssert.AreEqual(new[]{ 1, 2, 3, 4, 5 }, hits);
+	}
+
+	[Test]
+	public void SendAndReceiveBlocking_ManySenders()
+	{
+		var c = new Channel<int>(bufferSize: 0);
+
+		for(int i = 0; i< 5; i++) {
+			var monoDoesntHaveNewLoopScope = i;
+			Task.Run(() => {
+				c.Send(monoDoesntHaveNewLoopScope + 1).Wait();
+			});
+		}
+
+		var hits = new List<int>();
+		for(int i = 0; i< 5; i++) {
+			hits.Add(c.Receive().Result);
+		}
+
+		hits.Sort(); // 5 tasks run in random order
 		CollectionAssert.AreEqual(new[]{ 1, 2, 3, 4, 5 }, hits);
 	}
 }
