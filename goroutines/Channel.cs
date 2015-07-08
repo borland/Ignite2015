@@ -6,24 +6,24 @@ using System.Threading;
 public class Channel
 {
 	// await on this function
-	public static async Task Select<T1, T2>(
-		Channel<T1> c1, Action<T1> a1,
-		Channel<T1> c2, Action<T1> a2){
-
-		var cts = new CancellationTokenSource;
-
+//	public static async Task Select<T1, T2>(
+//		Channel<T1> c1, Action<T1> a1,
+//		Channel<T1> c2, Action<T1> a2){
+//
+//		var cts = new CancellationTokenSource();
+//
 		// hrm need some sort of global lock over all 3 channels
 		// so that we can cancel the receive on c1 when c2 arrives with a value
 		// but do so in a thread-safe way
-		var tasks = new[]{ c1.Receive(cts.Token), c2.Receive(cts.Token) };
-		await Task.WhenAny(tasks);
-		cts.Cancel();
+//		var tasks = new[]{ c1.Receive(cts.Token), c2.Receive(cts.Token) };
+//		await Task.WhenAny(tasks);
+//		cts.Cancel();
 
-		if(tasks[0].IsCompleted)
-			a1(tasks[0].Result);
-		else if(tasks[1].IsCompleted) // hrm what if they both complete. OH NO
-			a1(tasks[1].Result);
-	}
+//		if(tasks[0].IsCompleted)
+//			a1(tasks[0].Result);
+//		else if(tasks[1].IsCompleted) // hrm what if they both complete. OH NO
+//			a1(tasks[1].Result);
+//	}
 }
 
 public class Channel<T>
@@ -136,4 +136,17 @@ public class Channel<T>
 			}
 		}
 	}
+
+	/* try-receive:
+	 * for each channel:
+	 * - call tryReceive with a CTS
+	 *   when the channel gets a send(), it will check if the CTS is set
+	 *   if it is set, it will buffer the value and return false.
+	 *     - this will NOT unblock the sender
+	 *   if it is not set, it will set the CTS and return the value and unblock
+	 * 
+	 * what this means is that when channels get values they can't just
+	 * return a task. They have to bufferSentValue, then tryReturn with a CTS
+	 * - no CTS means tryReturn always succeeds
+	 */
 }
