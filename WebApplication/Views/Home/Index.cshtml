@@ -3,3 +3,8 @@
     ViewBag.Title = "Home Page";
 }
 <h1>Some people</h1>
+
+@Html.DataTable(Model, t => {
+    t.Column("name", m => m.Name);
+    t.Column("address", m => m.Address.UnsafeValue);
+})

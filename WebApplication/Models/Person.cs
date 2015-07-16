@@ -14,6 +14,7 @@ namespace WebApplication.Models
         {
             new Person { Name = "Orion", Address = "Hamilton" },
             new Person { Name = "Anon" },
+            new Person { Name = "Bill Gates", Address = "A mansion" },
         };
 
         public static Person[] LoadAll() => s_people;

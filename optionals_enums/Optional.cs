@@ -9,7 +9,7 @@ public static class OptionalExtensions
         else if (none != null)
             none();
     }
-
+    
     public static void Unwrap<T>(this T optional, Action<T> some, Action none = null) where T : class
     {
         if (optional != null)
@@ -41,6 +41,8 @@ public struct Optional<T> where T : class
             return m_value;
         }
     }
+
+    public T UnsafeValue => m_value;
 }
 
 
