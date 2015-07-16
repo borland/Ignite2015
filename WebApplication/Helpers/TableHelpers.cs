@@ -25,15 +25,16 @@ namespace WebApplication
 
             internal List<ColumnDefinition> Columns { get; } = new List<ColumnDefinition>();
 
-            public void Column(string title, Func<T, string> contents) => 
+            public TableBuilder<T> Column(string title, Func<T, string> contents) => 
                 Column(title, x => new MvcHtmlString(html.Encode(contents(x))));
 
-            public void Column(string title, Func<T, IHtmlString> unsafeContents)
+            public TableBuilder<T> Column(string title, Func<T, IHtmlString> unsafeContents)
             {
                 Columns.Add(new ColumnDefinition {
                     Title = title,
                     Generator = unsafeContents
                 });
+                return this;
             }
         }
 
