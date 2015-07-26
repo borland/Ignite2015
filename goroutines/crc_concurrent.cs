@@ -35,11 +35,13 @@ class crc_concurrent
 		var results = new Channel<CrcResult>();
 		var refCount = new Channel<int>(bufferSize: 1);
 		await refCount.Send(1);
-		await Task.Run(() => ScanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, refCount));
+		await Task.Run(() => ScanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount));
 
+        int totalFiles = 0;
 		while(true) {
 			var r = await results.Receive();
+            Console.WriteLine($"File #{++totalFiles}");
 			Console.WriteLine($"Got {r.Value} for {r.Path}");
-		}
+        }
 	}
 }

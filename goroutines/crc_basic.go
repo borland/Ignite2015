@@ -28,5 +28,5 @@ func scanDir(dir string) {
 }
 
 func main() {
-    scanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines")
+    scanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines")
 }

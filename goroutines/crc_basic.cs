@@ -3,6 +3,8 @@ using System.IO;
 
 class crc_basic
 {
+    static int totalFiles;
+
 	static uint CalcCrc32(string filePath) {
 		var buffer = File.ReadAllBytes(filePath);
 
@@ -13,7 +15,8 @@ class crc_basic
 		foreach(var f in Directory.GetFiles(dir)) {
 			var absPath = Path.Combine(dir, f);
 			var val = CalcCrc32(absPath);
-			Console.WriteLine($"Got crc {val} for {absPath}");
+            Console.WriteLine($"File #{++totalFiles}");
+            Console.WriteLine($"Got crc {val} for {absPath}");
 		}
 		foreach(var d in Directory.GetDirectories(dir)) {
 			ScanDir(Path.Combine(dir, d));
@@ -22,6 +25,6 @@ class crc_basic
 
 	public static void Run()
 	{
-		ScanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines");				
+		ScanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines");				
 	}
 }

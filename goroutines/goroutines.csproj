@@ -47,6 +47,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
+    <None Include="crc_basic.go" />
+    <None Include="crc_concurrent.go" />
     <None Include="packages.config" />
   </ItemGroup>
 </Project>

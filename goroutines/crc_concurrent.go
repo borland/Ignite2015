@@ -39,7 +39,7 @@ func main() {
     results := make(chan crcResult)
     refCount := make(chan int, 2) // need a buffered channel due to next line
     refCount <- 1
-    go scanDir("/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, refCount)
+    go scanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount)
     
     rc := 0
     
