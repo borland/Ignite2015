@@ -5,7 +5,7 @@ VisualStudioVersion = 14.0.22823.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ignite2015", "ignite2015\ignite2015.csproj", "{A50A5DD2-957E-47D0-8CF9-3A9153261364}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "andand", "andand\andand.csproj", "{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "andand-tap-scoping", "andand\andand-tap-scoping.csproj", "{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "goroutines", "goroutines\goroutines.csproj", "{AFCE2C8C-94D6-441C-9AD2-6B4C650BD5A9}"
 EndProject
@@ -14,6 +14,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "optionals_enums", "optionals_enums\optionals_enums.csproj", "{7FA7C715-4966-4700-A841-735B0E61EA8E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WebApplication", "WebApplication\WebApplication.csproj", "{0B7A1139-48D0-4464-9728-D19F56810262}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CppZeroCostAbstraction", "CppZeroCostAbstraction\CppZeroCostAbstraction.vcxproj", "{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CsZeroCostAbstraction", "CsZeroCostAbstraction\CsZeroCostAbstraction.csproj", "{72C374C0-1017-4479-AF6F-90CB8C19D055}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -63,6 +67,20 @@ Global
 		{0B7A1139-48D0-4464-9728-D19F56810262}.Release|Any CPU.Build.0 = Release|Any CPU
 		{0B7A1139-48D0-4464-9728-D19F56810262}.Release|x86.ActiveCfg = Release|Any CPU
 		{0B7A1139-48D0-4464-9728-D19F56810262}.Release|x86.Build.0 = Release|Any CPU
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Debug|x86.ActiveCfg = Debug|Win32
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Debug|x86.Build.0 = Debug|Win32
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Release|Any CPU.ActiveCfg = Release|Win32
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Release|x86.ActiveCfg = Release|Win32
+		{C962CDE8-9982-4BB8-BED1-AFDDB7CF7CDF}.Release|x86.Build.0 = Release|Win32
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Debug|x86.Build.0 = Debug|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Release|x86.ActiveCfg = Release|Any CPU
+		{72C374C0-1017-4479-AF6F-90CB8C19D055}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

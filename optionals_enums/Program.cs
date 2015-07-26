@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 
 namespace optionals_enums
 {
@@ -8,12 +10,12 @@ namespace optionals_enums
     {
         public static void Main(string[] args)
         {
-            var x = Divide(6, 0);
-            x.Switch(
+            var value = Divide(6, 0);
+            value.Switch(
                 a => Console.WriteLine($"Result was {a}"),
                 b => Console.WriteLine(b.Message));
 
-            GetFileContents("c:\\temp\\test1.txt").Unwrap(
+            ReadFile("c:\\temp\\test1.txt").Unwrap(
                 c => Console.WriteLine($"Word count is {WordCount(c)}"),
                 () => Console.WriteLine("warning: no file"));
         }
@@ -28,7 +30,7 @@ namespace optionals_enums
 
         static int WordCount(string x) =>  x.Split(' ').Length;
 
-        static Optional<string> GetFileContents(string path)
+        static Optional<string> ReadFile(string path)
         {
             if (!File.Exists(path))
                 return null;

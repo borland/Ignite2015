@@ -1,0 +1,11 @@
+﻿Build started 25/07/2015 6:40:30 a.m..
+     1>Project "C:\Users\orion\OneDrive\Ignite2015\dev\CppZeroCostAbstraction\CppZeroCostAbstraction.vcxproj" on node 3 (Build target(s)).
+     1>ClCompile:
+         C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\CL.exe /c /ZI /nologo /W3 /WX- /Od /Oy- /D WIN32 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"Debug\\" /Fd"Debug\vc140.pdb" /Gd /TP /analyze- /errorReport:prompt CppZeroCostAbstraction.cpp
+         CppZeroCostAbstraction.cpp
+     1>c:\users\orion\onedrive\ignite2015\dev\cppzerocostabstraction\cppzerocostabstraction.cpp(40): error C3688: invalid literal suffix 'ms'; literal operator or literal operator template 'operator ""ms' not found
+     1>Done Building Project "C:\Users\orion\OneDrive\Ignite2015\dev\CppZeroCostAbstraction\CppZeroCostAbstraction.vcxproj" (Build target(s)) -- FAILED.
+
+Build FAILED.
+
+Time Elapsed 00:00:00.20
