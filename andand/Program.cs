@@ -37,25 +37,10 @@ static class MainClass_ScopeRestriction
 
     static void Main(string[] args)
     {
-        //using (var tx = database.Transaction()) {
-        //    tx.Execute("update people set name = 'Orion' where id = 5");
-        //    tx.Commit();
-        //}
-
-        //var tx = database.Transaction();
-        //tx.Execute("update people set name = 'Orion' where id = 5");
-        //tx.Commit();
-
         IDatabase database = Connect("connectionString");
         database.Transaction(tx => {
             tx.Execute("update people set name = 'Orion' where id = 5");
             tx.Commit();
-        });
-
-        Server.Configure(config => {
-            config.LogLevel = LogLevel.Debug;
-            config.EagerLoad = true;
-            config.Middleware.Use<ExceptionNotifier>();
         });
     }
 

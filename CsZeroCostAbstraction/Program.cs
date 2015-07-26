@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using static System.Console;
 
@@ -45,36 +46,63 @@ class Program
 
     }
 
-    static void Main(string[] args)
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static double DoMaths()
+    {
+        double tenKms = 10 * 1000;
+        double oneHour = 60 * 60;
+
+        return tenKms / oneHour;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    static MetresPerSecond DoMathsWithStructs()
     {
         Metres tenKms = 10 * 1000;
         Seconds oneHour = 60 * 60;
 
-        var speed = tenKms / oneHour;
-        WriteLine($"{speed.Value} m/s");
+        return tenKms / oneHour;
+    }
 
-        var baseline = GC.GetTotalMemory(forceFullCollection:true);
+    static void Main(string[] args)
+    {
+        // ----- Memory -----
+        Console.ReadLine();
+
+        var baseline = GC.GetTotalMemory(forceFullCollection: true);
         var darray = new double[1000000];
         var after = GC.GetTotalMemory(forceFullCollection: true);
-        WriteLine("array of a million doubles approx {0} bytes\n", after - baseline);
+        WriteLine("array of a million doubles is {0} bytes\n", after - baseline);
 
         baseline = GC.GetTotalMemory(forceFullCollection: true);
         var marray = new Metres[1000000];
         after = GC.GetTotalMemory(forceFullCollection: true);
         WriteLine("array of a million Metres is {0} bytes\n", after - baseline);
-
-        baseline = GC.GetTotalMemory(forceFullCollection: true);
-        var larray = new int[1000000];
-        after = GC.GetTotalMemory(forceFullCollection: true);
-        WriteLine("array of a million ints is {0} bytes\n", after - baseline);
-
+        
         GC.KeepAlive(darray);
         GC.KeepAlive(marray);
-        GC.KeepAlive(larray);
 
-        ReadLine();
+        // ----- Cpu -----
+        Console.ReadLine();
 
-        //Delay(km1);
+        for (int i = 0; i < 1000; i++) { // "warmup" JIT
+            DoMaths();
+            DoMathsWithStructs();
+        }
+
+        var sw = Stopwatch.StartNew();
+        for(int i = 0; i < 50000000; i++)
+            DoMaths();
+
+        sw.Stop();
+        Console.WriteLine($"raw maths took {sw.ElapsedMilliseconds}ms");
+
+        sw.Restart();
+        for (int i = 0; i < 50000000; i++)
+            DoMathsWithStructs();
+
+        sw.Stop();
+        Console.WriteLine($"struct maths took {sw.ElapsedMilliseconds}ms");
     }
 
 }

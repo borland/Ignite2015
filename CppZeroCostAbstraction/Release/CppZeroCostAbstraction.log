@@ -1,5 +1,5 @@
-﻿Build started 25/07/2015 7:04:38 a.m..
-     1>Project "C:\Users\orion\OneDrive\Ignite2015\dev\CppZeroCostAbstraction\CppZeroCostAbstraction.vcxproj" on node 2 (Build target(s)).
+﻿Build started 27/07/2015 6:14:43 a.m..
+     1>Project "C:\Users\orion\OneDrive\Ignite2015\dev\CppZeroCostAbstraction\CppZeroCostAbstraction.vcxproj" on node 7 (Build target(s)).
      1>ClCompile:
          C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\CL.exe /c /Zi /nologo /W3 /WX- /O2 /Oi /Oy- /GL /D WIN32 /D NDEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"Release\\" /Fd"Release\vc140.pdb" /Gd /TP /analyze- /errorReport:prompt CppZeroCostAbstraction.cpp
          CppZeroCostAbstraction.cpp
@@ -12,4 +12,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:00.48
+Time Elapsed 00:00:01.10
