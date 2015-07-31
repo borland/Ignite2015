@@ -2,6 +2,7 @@
 using System.IO;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Threading;
 
 struct CrcResult {
 	public uint Value;
@@ -35,6 +36,8 @@ class crc_concurrent
 		var results = new Channel<CrcResult>();
 		var refCount = new Channel<int>(bufferSize: 1);
 		await refCount.Send(1);
+        new Thread(() => { }).Start();
+
 		await Task.Run(() => ScanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount));
 
         int totalFiles = 0;
