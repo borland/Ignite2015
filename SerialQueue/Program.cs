@@ -1,4 +1,4 @@
-// Copyright(c) 2015 Orion Edwards
+﻿// Copyright(c) 2015 Orion Edwards
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -17,18 +17,15 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-package main
-import "fmt"
-import "time"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
 
-func multiply(a int, b int, result chan int) {
-	result <- a * b
+class Program
+{
+    static void Main(string[] args)
+    {
+    }
 }
- 
-func main() {
-    result := make(chan int)
-    go multiply(10, 20, result)
-    time.Sleep(1000 * time.Millisecond)
-    fmt.Println("result was", <-result)
-}
- 

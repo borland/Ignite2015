@@ -19,6 +19,7 @@ Makefile.in
 *.pidb
 *.userprefs
 *.usertasks
+*.opensdf
 config.log
 config.make
 config.status

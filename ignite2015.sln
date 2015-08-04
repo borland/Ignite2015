@@ -1,10 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.22823.1
+VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ignite2015", "ignite2015\ignite2015.csproj", "{A50A5DD2-957E-47D0-8CF9-3A9153261364}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "andand-tap-scoping", "andand\andand-tap-scoping.csproj", "{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "goroutines", "goroutines\goroutines.csproj", "{AFCE2C8C-94D6-441C-9AD2-6B4C650BD5A9}"
@@ -23,6 +21,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SafeHandleCpp", "SafeHandle
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "goroutines.test", "goroutines\goroutines.test\goroutines.test.csproj", "{EB7C448A-40E8-40C9-9CCA-E8D730AC45B3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialQueue", "SerialQueue\SerialQueue.csproj", "{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,12 +31,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Debug|Any CPU.ActiveCfg = Debug|x86
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Debug|x86.ActiveCfg = Debug|x86
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Debug|x86.Build.0 = Debug|x86
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Release|Any CPU.ActiveCfg = Release|x86
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Release|x86.ActiveCfg = Release|x86
-		{A50A5DD2-957E-47D0-8CF9-3A9153261364}.Release|x86.Build.0 = Release|x86
 		{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}.Debug|Any CPU.ActiveCfg = Debug|x86
 		{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}.Debug|x86.ActiveCfg = Debug|x86
 		{1B5216BB-7CCC-43AC-AE3D-2D876727D1B2}.Debug|x86.Build.0 = Debug|x86
@@ -99,6 +93,14 @@ Global
 		{EB7C448A-40E8-40C9-9CCA-E8D730AC45B3}.Release|Any CPU.Build.0 = Release|Any CPU
 		{EB7C448A-40E8-40C9-9CCA-E8D730AC45B3}.Release|x86.ActiveCfg = Release|Any CPU
 		{EB7C448A-40E8-40C9-9CCA-E8D730AC45B3}.Release|x86.Build.0 = Release|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Debug|x86.Build.0 = Debug|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Release|x86.ActiveCfg = Release|Any CPU
+		{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

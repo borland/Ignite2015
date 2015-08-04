@@ -37,7 +37,6 @@
   <ItemGroup>
     <Compile Include="basic.cs" />
     <Compile Include="Go.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Crc32.cs" />
     <Compile Include="crc_basic.cs" />
     <Compile Include="crc_concurrent.cs" />
@@ -49,5 +48,8 @@
     <None Include="crc_basic.go" />
     <None Include="crc_concurrent.go" />
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Properties\" />
   </ItemGroup>
 </Project>
