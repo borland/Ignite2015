@@ -44,6 +44,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AnonymousDisposable.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="SerialQueue.cs" />
   </ItemGroup>
