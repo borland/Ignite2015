@@ -47,11 +47,9 @@ public class SerialQueue : IDispatchQueue, IDisposable
         lock (m_asyncActions)
             m_asyncActions.Add(action);
 
-        var cts = new CancellationTokenSource();
-        Task.Run(() => ProcessAsyncActions(), cts.Token);
+        ThreadPool.QueueUserWorkItem(s => ProcessAsyncActions());
 
         return new AnonymousDisposable(() => {
-            cts.Cancel();
             lock (m_asyncActions)
                 m_asyncActions.Remove(action);
         });
@@ -60,16 +58,16 @@ public class SerialQueue : IDispatchQueue, IDisposable
     void ProcessAsyncActions()
     {
         bool actionsLockTaken = false;
-        while (actionsLockTaken == false)
-            Monitor.Enter(m_asyncActions, ref actionsLockTaken);
-
-        if (asyncActionsAreProcessing)
-            return; // another thread is already processing, we don't want to waste this one sitting on m_executionLock
-        asyncActionsAreProcessing = true;
-        // even though we don't hold m_asyncActionsLock when asyncActionsAreProcessing is set to false
-        // that should be OK as the only "contention" happens up here while we do hold it
-
         try {
+            Monitor.Enter(m_asyncActions, ref actionsLockTaken);
+            Debug.Assert(actionsLockTaken);
+
+            if (asyncActionsAreProcessing)
+                return; // another thread is already processing, we don't want to waste this one sitting on m_executionLock
+            asyncActionsAreProcessing = true;
+            // even though we don't hold m_asyncActionsLock when asyncActionsAreProcessing is set to false
+            // that should be OK as the only "contention" happens up here while we do hold it
+
             while (m_asyncActions.Count > 0) {
                 lock (m_executionLock) {
                     // get the head of the queue, then release the lock
@@ -80,11 +78,12 @@ public class SerialQueue : IDispatchQueue, IDisposable
 
                     // process the action
                     action();
-
-                    // now re-acquire the lock for the next thing
-                    while (actionsLockTaken == false)
-                        Monitor.Enter(m_asyncActions, ref actionsLockTaken);
                 }
+
+                // now re-acquire the lock for the next thing
+                Debug.Assert(!actionsLockTaken);
+                Monitor.Enter(m_asyncActions, ref actionsLockTaken);
+                Debug.Assert(actionsLockTaken);
             }
         }
         finally {
@@ -97,10 +96,10 @@ public class SerialQueue : IDispatchQueue, IDisposable
     public void DispatchSync(Action action)
     {
         bool actionsLockTaken = false;
-        while (actionsLockTaken == false)
-            Monitor.Enter(m_asyncActions, ref actionsLockTaken);
-
         try {
+            Monitor.Enter(m_asyncActions, ref actionsLockTaken);
+            Debug.Assert(actionsLockTaken);
+
             if (m_asyncActions.Count == 0) {
                 lock (m_executionLock) {
                     Monitor.Exit(m_asyncActions);
@@ -132,5 +131,5 @@ public class SerialQueue : IDispatchQueue, IDisposable
     {
         lock (m_asyncActions)
             m_asyncActions.Clear();
-    }    
+    }
 }

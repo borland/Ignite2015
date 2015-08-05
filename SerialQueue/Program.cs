@@ -24,62 +24,72 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 1;
+        const int NumQueues = 4000;
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
-        var memory = GC.GetTotalMemory(forceFullCollection: true);
+        var memory = Process.GetCurrentProcess().VirtualMemorySize64;
 
         // create all the queues
-        var queues = new SerialQueue[NumQueues];
+        var operations = new OperationState[NumQueues];
         for(int i = 0; i < NumQueues; i++) {
-            queues[i] = new SerialQueue();
+            operations[i] = new OperationState { Queue = new SerialQueue() };
         }
 
-        var memory2 = GC.GetTotalMemory(forceFullCollection: true);
-        var diff = (memory2 - memory) / 1024;
+        var memory2 = Process.GetCurrentProcess().VirtualMemorySize64;
+        var diff = (double)(memory2 - memory) / (1024.0 * 1024.0);
 
-        Console.WriteLine($"Queues consume {diff}KB; About to process events"); Console.ReadLine();
+        Console.WriteLine($"Queues consume {(int)diff} MB of virtual memory; About to process events"); Console.ReadLine();
         var sw = Stopwatch.StartNew();
 
         // post all the events
-        var counters = new int[NumQueues];
-        for (int i = 0; i < NumQueues; i++) {
-            var loopi = i;
-            queues[i].DispatchAsync(() => {
-                counters[loopi]++;
-            });
+        
+        foreach(var op in operations) {
+            op.Queue.DispatchAsync(() => op.Document = ParseXml());
         }
-        for (int i = 0; i < NumQueues; i++) {
-            var loopi = i;
-            queues[i].DispatchAsync(() => {
-                counters[loopi]++;
-            });
+        foreach (var op in operations) {
+            op.Queue.DispatchAsync(() => op.CD = GetCDByArtist(op.Document, "Bee Gees"));
         }
-        for (int i = 0; i < NumQueues; i++) {
-            var loopi = i;
-            queues[i].DispatchSync(() => {
-                counters[loopi]++;
-            });
+        foreach (var op in operations) {
+            op.Queue.DispatchSync(() => op.Price = GetPrice(op.CD));
         }
-        for(int i = 0; i < NumQueues; i++) {
-            if (counters[i] != 3) {
-                Console.WriteLine($"queue {i} broken!. hitcount was {counters[i]} instead of 3");
-            }
+        foreach(var op in operations) {
+            if(op.Price != 10.90)
+                Console.WriteLine($"queue broken!. price was {op.Price} instead of 10.90");
         }
         sw.Stop();
 
         Console.WriteLine($"Processed in {sw.ElapsedMilliseconds}ms; about to dispose"); Console.ReadLine();
 
         // dispose all the queues
-        foreach (var q in queues)
+        foreach (IDisposable q in operations.Select(op => op.Queue))
             q.Dispose();
     }
+
+    // "busy work" for our queues to do
+    static XDocument ParseXml() => XDocument.Load("cdcatalog.xml");
+
+    static XElement GetCDByArtist(XDocument document, string artistName)
+        => document.Root.Elements("CD").FirstOrDefault(e => e.Element("ARTIST").Value == artistName);
+
+    static double GetPrice(XElement cdElement)
+        => double.Parse(cdElement.Element("PRICE").Value);
+
+    class OperationState
+    {
+        public IDispatchQueue Queue;
+
+        public XDocument Document;
+        public XElement CD;
+        public double Price;
+    }
 }
+
 
 // manages a "queue" by posting events to a worker thread
 sealed class ThreadQueue : IDispatchQueue, IDisposable
