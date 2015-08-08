@@ -23,12 +23,12 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 [TestClass]
-public class Channel
+public class TestChannel_Basic
 {
     [TestMethod]
     public void SendAndReceive_Buffer_1()
     {
-        var c = new Channel<int>(bufferSize: 1);
+        var c = new BufferedChannel<int>(bufferSize: 1);
         c.Send(1).Wait();
         Assert.AreEqual(1, c.Receive().Result);
     }
@@ -36,7 +36,7 @@ public class Channel
     [TestMethod]
     public void SendAndReceive_Buffer_5()
     {
-        var c = new Channel<int>(bufferSize: 5);
+        var c = new BufferedChannel<int>(bufferSize: 5);
         c.Send(1).Wait();
         c.Send(2).Wait();
         c.Send(3).Wait();
@@ -52,7 +52,7 @@ public class Channel
     [TestMethod]
     public void SendAndReceiveBlocking_1item()
     {
-        var c = new Channel<int>(bufferSize: 0);
+        var c = new Channel<int>();
 
         var hits = new List<int>();
         Task.Run(() => {
@@ -69,7 +69,7 @@ public class Channel
     [TestMethod]
     public void SendAndReceiveBlocking_Sequence()
     {
-        var c = new Channel<int>(bufferSize: 0);
+        var c = new Channel<int>();
 
         var hits = new List<int>();
         Task.Run(() => {
@@ -90,7 +90,7 @@ public class Channel
     [TestMethod]
     public void SendAndReceiveBlocking_ManyReceivers()
     {
-        var c = new Channel<int>(bufferSize: 0);
+        var c = new Channel<int>();
 
         var hits = new List<int>();
         for (int i = 0; i < 5; i++) {
@@ -111,7 +111,7 @@ public class Channel
     [TestMethod]
     public void SendAndReceiveBlocking_ManySenders()
     {
-        var c = new Channel<int>(bufferSize: 0);
+        var c = new Channel<int>();
 
         for (int i = 0; i < 5; i++) {
             var monoDoesntHaveNewLoopScope = i;
@@ -127,6 +127,25 @@ public class Channel
 
         hits.Sort(); // 5 tasks run in random order
         CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
+    }
+}
+
+[TestClass]
+public class TestChannel_Select
+{
+    //[TestMethod]
+    public async Task MultiChannels_SelectPullsFromEachChannel()
+    {
+        var c1 = new Channel<int>();
+        var c2 = new Channel<int>();
+
+        var hits = new List<int>();
+
+        //await Go.Select(
+        //    Go.Case(c1, hits.Add),
+        //    Go.Case(c2, hits.Add));
+
+        Assert.Fail("oh no");
     }
 }
 

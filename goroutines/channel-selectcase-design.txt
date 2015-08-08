@@ -1,0 +1,48 @@
+BufferedChannel<T>{ 
+	async void Send(T) // puts things in the buffer and calls base.Send when it needs to block
+	async T Receive() // fetches from the buffer and calls base.Receive when it needs to block
+}
+
+class Receiver<T> {
+  bool TryReceive(T value)
+  Action<T> ReceivedValue // this is where we unblock the receive and return the value
+}
+
+class SelectCaseReceiver<T> : Receiver {
+  // reference to external atomic thing passed in via CTOR. Could just be reference to parent class with "Acquire" method
+  bool TryReceive(T value)
+  Action<T> ReceivedValue // this is where we invoke the select case lambda and unblock the select
+}
+
+class Channel<T> {
+    async void Send(T)
+	async T Receive()
+	
+	async bool ReceiveInto(Receiver<T>)
+	Receiver<T> m_receiver	
+}
+
+If the channel is full, then it can simply deque the first element and call BlockingSend on itself.
+
+If the channel has a "receiver", send will call TryReceive (an async "blocking" method) on the Receiver
+	One receiever will return true indicating it "won", which will unblock the send.
+	Others will return false indicating they "lost" - in which case the value will be stashed and the receiver will be nulled out
+	
+If the channel has no receiver it will block and wait until it gets one, then call TryReceive
+
+For a normal recieve, it will make a new anonymous receiver (perhaps re-use a static instance) which always returns true
+and then just assign it to itself and call TryReceive
+
+-----
+
+If we post a receiver and there is no sender, then we simply block until one is available, and then go into the above state
+
+-----
+
+for selectcase (multiple channels):
+Select will create a new receiver for each channel, which is tied into some kind of atomic thing.
+It will loop over each channel and post the receiver ("ReceiveInto?").
+When the senders call TryReceive, the first think it will do is check the atomic thing, and 
+the first one will return true; all others will return false
+
+

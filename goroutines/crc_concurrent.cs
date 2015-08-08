@@ -53,7 +53,7 @@ class crc_concurrent
 	public static async void Run()
 	{
 		var results = new Channel<CrcResult>();
-		var refCount = new Channel<int>(bufferSize: 1);
+		var refCount = new BufferedChannel<int>(1);
 		await refCount.Send(1);
         new Thread(() => { }).Start();
 
