@@ -18,15 +18,54 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Threading.Tasks;
 
 class MainClass
 {
     public static void Main(string[] args)
     {
-        basic.Run();
+        //basic.Run();
         //crc_basic.Run();
         //crc_concurrent.Run();
 
-        Console.ReadLine(); // need something to keep our process alive
+        FanOutIn().Wait();
+    }
+
+    public static async Task FanOutIn()
+    {
+        var numbers = new Channel<int>();
+        var letters = new Channel<char>();
+
+        Go.Run(async () => {
+            for (int i = 0; i < 1; i++)
+                await numbers.Send(i);
+
+            Console.WriteLine("numbers all done");
+        });
+
+        Go.Run(async () => {
+            for (int i = 0; i < 10; i++)
+            {
+                var num = (char)(i % 52);
+                if (num < 26)
+                    await letters.Send((char)(num + 97));
+                else
+                    await letters.Send((char)(num + 65 - 26));
+            }
+
+            Console.WriteLine("letters all done");
+        });
+
+        while(true)
+        {
+            await Go.Select(
+                Go.Case(numbers, num => {
+                    Console.WriteLine($"Got {num}");
+                }),
+                Go.Case(letters, ch => {
+                    Console.WriteLine($"Got {ch}");
+                }));
+        }
+
     }
 }
