@@ -86,6 +86,7 @@ class Program
     static void Main(string[] args)
     {
         // ----- Memory -----
+        Console.WriteLine("Press enter to start memory stats");
         Console.ReadLine();
 
         var baseline = GC.GetTotalMemory(forceFullCollection: true);
@@ -102,6 +103,7 @@ class Program
         GC.KeepAlive(marray);
 
         // ----- Cpu -----
+        Console.WriteLine("Press enter for maths");
         Console.ReadLine();
 
         for (int i = 0; i < 1000; i++) { // "warmup" JIT
