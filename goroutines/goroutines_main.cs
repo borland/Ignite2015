@@ -37,10 +37,10 @@ class MainClass
         var letters = new Channel<char>();
 
         Go.Run(async () => {
-            for (int i = 0; i < 1; i++)
+            for (int i = 0; i < 10; i++)
                 await numbers.Send(i);
 
-            Console.WriteLine("numbers all done");
+            Console.WriteLine("numbers all sent");
         });
 
         Go.Run(async () => {
@@ -53,7 +53,7 @@ class MainClass
                     await letters.Send((char)(num + 65 - 26));
             }
 
-            Console.WriteLine("letters all done");
+            Console.WriteLine("letters all sent");
         });
 
         while(true)

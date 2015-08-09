@@ -23,6 +23,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Text;
 
 [TestClass]
 public class TestChannel_Basic
@@ -194,19 +195,52 @@ public class TestChannel_Basic
 [TestClass]
 public class TestChannel_Select
 {
-    //[TestMethod]
+    [TestMethod]
     public async Task MultiChannels_SelectPullsFromEachChannel()
     {
         var c1 = new Channel<int>();
         var c2 = new Channel<int>();
 
-        var hits = new List<int>();
+        var sb = new StringBuilder();
 
-        //await Go.Select(
-        //    Go.Case(c1, hits.Add),
-        //    Go.Case(c2, hits.Add));
+        var t = Task.Run(async () => {
+            await c1.Send(1);
+            await c2.Send(2);
+        });
 
-        Assert.Fail("oh no");
+        // it frees up after the first time it's hit
+        await Go.Select(
+            Go.Case(c1, i => sb.Append($"c1-{i};")),
+            Go.Case(c2, i => sb.Append($"c2-{i};")));
+        Assert.AreEqual("c1-1;", sb.ToString());
+
+        await Go.Select(
+            Go.Case(c1, i => sb.Append($"c1-{i};")),
+            Go.Case(c2, i => sb.Append($"c2-{i};")));
+        Assert.AreEqual("c1-1;c2-2;", sb.ToString());
+    }
+
+    [TestMethod]
+    public async Task MultiChannels_SelectDoesntLoseUnselectedValues()
+    {
+        var c1 = new Channel<int>();
+        var c2 = new Channel<int>();
+
+        var sb = new StringBuilder();
+
+        var t1 = c1.Send(1); // don't wait for the sends to complete, they won't until later
+        var t2 = c2.Send(2);
+       
+        // it frees up after the first time it's hit
+        await Go.Select(
+            Go.Case(c1, i => sb.Append($"c1-{i};")),
+            Go.Case(c2, i => sb.Append($"c2-{i};")));
+        Assert.AreEqual("c1-1;", sb.ToString());
+
+        await Go.Select(
+            Go.Case(c1, i => sb.Append($"c1-{i};")),
+            Go.Case(c2, i => sb.Append($"c2-{i};")));
+        Assert.AreEqual("c1-1;c2-2;", sb.ToString());
     }
 }
 
