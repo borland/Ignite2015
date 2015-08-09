@@ -2,6 +2,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace goroutines
 {
@@ -46,9 +47,12 @@ namespace goroutines
             Assert.AreEqual(3, q.PromisedCount);
 
             q.Enqueue(1);
-            q.Enqueue(2);
-            q.Enqueue(3);
+            CollectionAssert.AreEqual(new[] { 1 }, hits);
 
+            q.Enqueue(2);
+            CollectionAssert.AreEqual(new[] { 1, 2 }, hits);
+
+            q.Enqueue(3);
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hits);
 
             Assert.AreEqual(0, q.Count);

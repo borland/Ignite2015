@@ -18,9 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 
 [TestClass]
 public class TestChannel_Basic
@@ -87,26 +89,85 @@ public class TestChannel_Basic
         CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
     }
 
+#pragma warning disable CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
+    // we don't need to await in this case because we're using AutoResetEvent for synchronization
     [TestMethod]
     public void SendAndReceiveBlocking_ManyReceivers()
     {
         var c = new Channel<int>();
 
         var hits = new List<int>();
+        var evt = new AutoResetEvent(false);
         for (int i = 0; i < 5; i++) {
             Task.Run(() => {
                 hits.Add(c.Receive().Result);
+                evt.Set();
             });
         }
 
         Assert.AreEqual(0, hits.Count);
-        c.Send(1).Wait();
-        c.Send(2).Wait();
-        c.Send(3).Wait();
-        c.Send(4).Wait();
-        c.Send(5).Wait();
+        c.Send(1);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1 }, hits);
+
+        c.Send(2);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2 }, hits);
+
+        c.Send(3);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hits);
+
+        c.Send(4);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, hits);
+
+        c.Send(5);
+        evt.WaitOne();
         CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
     }
+
+    // we don't need to await in this case because we're using AutoResetEvent for synchronization
+    [TestMethod]
+    public void SendAndReceiveBlocking_ManyReceivers_ArrivingOneAtATime()
+    {
+        var c = new Channel<int>();
+
+        var hits = new List<int>();
+        var evt = new AutoResetEvent(false);
+        Action addReceiver = () => {
+            Task.Run(() => {
+                hits.Add(c.Receive().Result);
+                evt.Set();
+            });
+        };
+        Assert.AreEqual(0, hits.Count);
+        addReceiver();
+        c.Send(1);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1 }, hits);
+
+        addReceiver();
+        c.Send(2);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2 }, hits);
+
+        addReceiver();
+        c.Send(3);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hits);
+
+        addReceiver();
+        c.Send(4);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, hits);
+
+        addReceiver();
+        c.Send(5);
+        evt.WaitOne();
+        CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
+    }
+#pragma warning restore CS4014 // Because this call is not awaited, execution of the current method continues before the call is completed
 
     [TestMethod]
     public void SendAndReceiveBlocking_ManySenders()

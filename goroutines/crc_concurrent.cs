@@ -50,7 +50,7 @@ class crc_concurrent
 		}
 	}
 
-	public static async void Run()
+	public static async Task Run()
 	{
 		var results = new Channel<CrcResult>();
 		var refCount = new BufferedChannel<int>(1);
