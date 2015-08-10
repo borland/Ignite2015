@@ -12,6 +12,15 @@ using System.Web.Mvc;
 
 namespace WebApplication
 {
+    static class TapExt
+    {
+        public static T Tap<T>(this T obj, Action<T> action)
+        {
+            action(obj);
+            return obj;
+        }
+    }
+
     public static class TableHelpers
     {
         public class TableBuilder<T>
@@ -43,7 +52,7 @@ namespace WebApplication
             }
         }
 
-        public static IHtmlString DataTable<T>(this HtmlHelper html, IEnumerable<T> model, Action<TableBuilder<T>> builder)
+        public static IHtmlString DataTable<T>(this HtmlHelper html, IEnumerable<T> model, Action<TableBuilder<T>> builder, object htmlAttributes = null)
         {
             var tb = new TableBuilder<T>(html);
             builder(tb);
@@ -59,10 +68,12 @@ namespace WebApplication
                         tb.Columns.Select(c => new TagBuilder("td") { InnerHtml = c.Generator(m).ToString() }.ToString()))
                 }.ToString()));
 
+
+            var attrs = htmlAttributes.Unwrap(h => HtmlHelper.AnonymousObjectToHtmlAttributes(h));
+
             return MvcHtmlString.Create(new TagBuilder("table") {
-                Attributes = { ["border"] = "1" },
                 InnerHtml = string.Join("", header, rows)
-            }.ToString());
+            }.Tap(tag => attrs.Unwrap(a => tag.MergeAttributes(a))).ToString());
         }
     }
 }

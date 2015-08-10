@@ -23,6 +23,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "goroutines.test", "goroutin
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SerialQueue", "SerialQueue\SerialQueue.csproj", "{1C3670E2-A6FE-4715-939F-83EEBA4B8DB9}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F143DDCD-AC4D-4290-BA5F-659CB2C44BCD}"
+	ProjectSection(SolutionItems) = preProject
+		UNLICENSE.txt = UNLICENSE.txt
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64

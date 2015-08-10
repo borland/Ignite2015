@@ -1,15 +1,36 @@
 ﻿@* This is free and unencumbered software released into the public domain.
-   Anyone is free to copy, modify, publish, use, compile, sell, or
-   distribute this software, either in source code form or as a compiled
-   binary, for any purpose, commercial or non-commercial, and by any
-   means.*@
+    Anyone is free to copy, modify, publish, use, compile, sell, or
+    distribute this software, either in source code form or as a compiled
+    binary, for any purpose, commercial or non-commercial, and by any
+    means.*@
 
 @model IEnumerable<WebApplication.Models.Person>
-@{
-    ViewBag.Title = "Home Page";
-}
-<h1>Some people</h1>
+<html>
+<body>
 
-@Html.DataTable(Model, t => t
-    .Column("name", m => m.Name)
-    .Column("address", m => m.Address.UnsafeValue))
+    <style type="text/css">
+        * {
+            font-family: 'Segoe UI';
+        }
+        .datatable { border-collapse: collapse; }
+        .datatable th {
+            background-color: #a3c0e0;
+            padding:2px;
+            border: none;
+        }
+        .datatable td {
+            border: 1px solid #a3c0e0;
+            padding: 2px;
+        }
+    </style>
+
+
+    <h1>Some people</h1>
+
+    @Html.DataTable(Model, t => {
+        t.Column("Name", m => m.Name);
+        t.Column("Address", m => m.Address.UnsafeValue);
+    }, new { @class="datatable", style="width:100%" })
+
+</body>
+</html>
