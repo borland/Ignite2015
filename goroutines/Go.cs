@@ -59,6 +59,9 @@ public static class Go
 
         public Task SelectAsync(Func<bool> sync)
         {
+            if (!Channel.IsOpen)
+                return Task.FromResult(false);
+
             var r = new SelectCaseReceiver<T>(sync);
             return Task = Channel.ReceiveInto(r).ContinueWith(t => Result = t.Result);
         }
@@ -191,11 +194,16 @@ public class AwaitableQueue<T>
 
 public class Channel<T>
 {
+    volatile bool m_isOpen = true;
+
     // thread-safety provided by awaitableQueue
-    AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
+    readonly AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
 
     public virtual async Task Send(T value)
     {
+        if (!m_isOpen) // in go, a send to a closed channel panics
+            throw new InvalidOperationException("channel closed");
+
         while (true) {
             var receiver = await m_receivers.Dequeue();
             if (receiver.TryReceive(value))
@@ -207,11 +215,25 @@ public class Channel<T>
 
     public virtual Task<T> ReceiveInto(IReceiver<T> receiver)
     {
+        // in go, a receive from a closed channel returns the zero value immediately
+        if (!m_isOpen) {
+            receiver.TryReceive(default(T));
+            return Task.FromResult(default(T));
+        }
+
         m_receivers.Enqueue(receiver);
         // now we have to wait for someone to call TryReceive on the receiver and for it to succeed
         // we can always block forever, it's not like Select where we have to retry
         return receiver.ReceivedValue;
     }
+
+    public bool Close() => m_isOpen = false;
+
+    public bool IsOpen => m_isOpen;
+
+    // TODO unit tests for closing of channels
+
+    // TODO we should be able to adapt a channel into an enumerable of sorts
 }
 
 public class BufferedChannel<T> : Channel<T>
