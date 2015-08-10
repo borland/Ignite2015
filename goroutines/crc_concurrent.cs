@@ -23,33 +23,48 @@ class crc_concurrent
 			Value = DamienG.Security.Cryptography.Crc32.Compute(buffer),
 			Path = filePath
 		});
+        await refCount.Send(-1);
 	}
 
-	static void ScanDir(string dir, Channel<CrcResult> results, Channel<int> refCount) {
+	static async Task ScanDir(string dir, Channel<CrcResult> results, Channel<int> refCount) {
 		foreach(var f in Directory.GetFiles(dir)) {
 			var absPath = Path.Combine(dir, f);
-			Task.Run(() => CalcCrc32(absPath, results, refCount));
+            await refCount.Send(1);
+			Go.Run(CalcCrc32, absPath, results, refCount);
 		}
 		foreach(var d in Directory.GetDirectories(dir)) {
 			var absPath = Path.Combine(dir, d);
-			Task.Run(() => ScanDir(absPath, results, refCount));
+            await refCount.Send(1);
+            Go.Run(ScanDir, absPath, results, refCount);
 		}
-	}
+        await refCount.Send(-1);
+    }
 
-	public static async Task Run()
-	{
-		var results = new Channel<CrcResult>();
-		var refCount = new BufferedChannel<int>(1);
-		await refCount.Send(1);
-        new Thread(() => { }).Start();
+    public static async Task Run()
+    {
+        var results = new Channel<CrcResult>();
+        var refCount = new BufferedChannel<int>(2);
+        await refCount.Send(100);
+        Go.Run(ScanDir, "/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount);
 
-		await Task.Run(() => ScanDir("/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount));
-
+        int rc = 0;
         int totalFiles = 0;
-		while(true) {
-			var r = await results.Receive();
-            Console.WriteLine($"File #{++totalFiles}");
-			Console.WriteLine($"Got {r.Value} for {r.Path}");
+        for (var stop = false; !stop;) {
+            await Go.Select(
+                Go.Case(results, r => {
+                    Console.WriteLine($"Got {r.Value} for {r.Path}");
+                    totalFiles++;
+                }),
+                Go.Case(refCount, delta => {
+                    rc += delta;
+                    if (rc == 0) {
+                        Console.WriteLine("all done");
+                        stop = true;
+                    }
+                }));
         }
-	}
+
+        Console.WriteLine($"{totalFiles} total files");
+    }
+        
 }

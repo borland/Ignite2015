@@ -24,19 +24,19 @@ public static class Go
     public static void Run<T1, T2, TResult>(Func<T1, T2, TResult> action, T1 arg1, T2 arg2) => Task.Run(() => action(arg1, arg2));
     public static void Run<T1, T2, T3, TResult>(Func<T1, T2, T3, TResult> action, T1 arg1, T2 arg2, T3 arg3) => Task.Run(() => action(arg1, arg2, arg3));
     public static void Run<T1, T2, T3, T4, TResult>(Func<T1, T2, T3, T4, TResult> action, T1 arg1, T2 arg2, T3 arg3, T4 arg4) => Task.Run(() => action(arg1, arg2, arg3, arg4));
-
+    
     // await on this function
     public static async Task Select(params ISelectCase[] cases)
     {
-        var cts = new CancellationTokenSource();
+        int done = 0;
+        Func<bool> sync = () => Interlocked.Exchange(ref done, 1) == 0;
 
         // hrm need some sort of global lock over all 3 channels
         // so that we can cancel the receive on c1 when c2 arrives with a value
         // but do so in a thread-safe way
-        var tasks = cases.Select(c => c.SelectAsync(cts.Token)).ToArray();
+        var tasks = cases.Select(c => c.SelectAsync(sync)).ToArray();
         var completedTask = await Task.WhenAny(tasks);
-        cts.Cancel();
-
+        
         foreach (var c in cases)
             c.ApplyResultIfIsMyTask(completedTask);
 
@@ -45,7 +45,7 @@ public static class Go
 
     public interface ISelectCase
     {
-        Task SelectAsync(CancellationToken cancellationToken);
+        Task SelectAsync(Func<bool> lockAcquirer);
         void ApplyResultIfIsMyTask(Task task);
     }
 
@@ -57,11 +57,10 @@ public static class Go
         Task Task;
         T Result = default(T);
 
-        public Task SelectAsync(CancellationToken cancellationToken)
+        public Task SelectAsync(Func<bool> sync)
         {
-            return Task = Channel.Receive().ContinueWith(a => {
-                Result = a.Result;
-            });
+            var r = new SelectCaseReceiver<T>(sync);
+            return Task = Channel.ReceiveInto(r).ContinueWith(t => Result = t.Result);
         }
 
         public void ApplyResultIfIsMyTask(Task task)
@@ -71,22 +70,69 @@ public static class Go
         }
     }
 
+    public class MultiSelectCase<T> : ISelectCase
+    {
+        public IEnumerable<Channel<T>> Channels;
+        public Action<T> Action;
+
+        Task Task;
+        T Result = default(T);
+
+        public Task SelectAsync(Func<bool> sync)
+        {
+            var r = new SelectCaseReceiver<T>(sync);
+            return Task = Task.WhenAny(
+                Channels.Select(c => c.ReceiveInto(r).ContinueWith(t => Result = t.Result)));
+        }
+
+        public void ApplyResultIfIsMyTask(Task task)
+        {
+            if (task == Task)
+                Action(Result);
+        }
+    }
+
+    public static MultiSelectCase<T> Case<T>(IEnumerable<Channel<T>> channels, Action<T> action)
+        => new MultiSelectCase<T> { Channels = channels, Action = action };
+
     public static SelectCase<T> Case<T>(Channel<T> channel, Action<T> action)
         => new SelectCase<T> { Channel = channel, Action = action };
-
 }
 
-public class Receiver<T>
+public interface IReceiver<T>
 {
-    readonly TaskCompletionSource<T> m_tcs = new TaskCompletionSource<T>();
+    bool TryReceive(T value);
+    Task<T> ReceivedValue { get; }
+}
 
-    public bool TryReceive(T value)
+public class Receiver<T> : IReceiver<T>
+{
+    protected readonly TaskCompletionSource<T> m_tcs = new TaskCompletionSource<T>();
+
+    public virtual bool TryReceive(T value)
     {
         m_tcs.SetResult(value);
         return true;
     }
 
     public Task<T> ReceivedValue => m_tcs.Task;
+}
+
+public class SelectCaseReceiver<T> : Receiver<T>
+{
+    readonly Func<bool> m_sync;
+
+    public SelectCaseReceiver(Func<bool> sync)
+    { m_sync = sync; }
+
+    public override bool TryReceive(T value)
+    {
+        if (m_sync()) { // we won the race
+            m_tcs.SetResult(value);
+            return true;
+        }
+        return false; // we lost the race
+    }
 }
 
 // wrapper over a normal queue that has awaitable Dequeue
@@ -146,7 +192,7 @@ public class AwaitableQueue<T>
 public class Channel<T>
 {
     // thread-safety provided by awaitableQueue
-    AwaitableQueue<Receiver<T>> m_receivers = new AwaitableQueue<Receiver<T>>();
+    AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
 
     public virtual async Task Send(T value)
     {
@@ -159,7 +205,7 @@ public class Channel<T>
 
     public Task<T> Receive() => ReceiveInto(new Receiver<T>());
 
-    public virtual Task<T> ReceiveInto(Receiver<T> receiver)
+    public virtual Task<T> ReceiveInto(IReceiver<T> receiver)
     {
         m_receivers.Enqueue(receiver);
         // now we have to wait for someone to call TryReceive on the receiver and for it to succeed
@@ -196,7 +242,7 @@ public class BufferedChannel<T> : Channel<T>
         return base.Send(valueToSend);
     }
 
-    public override Task<T> ReceiveInto(Receiver<T> receiver)
+    public override Task<T> ReceiveInto(IReceiver<T> receiver)
     {
         lock (m_buffer) {
             if(m_buffer.Count > 0) {

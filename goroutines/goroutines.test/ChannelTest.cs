@@ -61,10 +61,12 @@ public class TestChannel_Basic
         var c = new Channel<int>();
 
         var hits = new List<int>();
+        var mre = new ManualResetEvent(false);
         Task.Run(() => {
             for (int i = 0; i < 5; i++) {
                 hits.Add(c.Receive().Result);
             }
+            mre.Set();
         });
 
         Assert.AreEqual(0, hits.Count);
@@ -73,6 +75,7 @@ public class TestChannel_Basic
         c.Send(3).Wait();
         c.Send(4).Wait();
         c.Send(5).Wait();
+        mre.WaitOne();
         CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
     }
 
@@ -196,14 +199,14 @@ public class TestChannel_Select
 
         // it frees up after the first time it's hit
         await Go.Select(
-            Go.Case(c1, i => sb.Append($"c1-{i};")),
-            Go.Case(c2, i => sb.Append($"c2-{i};")));
-        Assert.AreEqual("c1-1;", sb.ToString());
+            Go.Case(c1, i => sb.Append($"c1={i};")),
+            Go.Case(c2, i => sb.Append($"c2={i};")));
+        Assert.AreEqual("c1=1;", sb.ToString());
 
         await Go.Select(
-            Go.Case(c1, i => sb.Append($"c1-{i};")),
-            Go.Case(c2, i => sb.Append($"c2-{i};")));
-        Assert.AreEqual("c1-1;c2-2;", sb.ToString());
+            Go.Case(c1, i => sb.Append($"c1={i};")),
+            Go.Case(c2, i => sb.Append($"c2={i};")));
+        Assert.AreEqual("c1=1;c2=2;", sb.ToString());
     }
 
     [TestMethod]
@@ -219,14 +222,45 @@ public class TestChannel_Select
        
         // it frees up after the first time it's hit
         await Go.Select(
-            Go.Case(c1, i => sb.Append($"c1-{i};")),
-            Go.Case(c2, i => sb.Append($"c2-{i};")));
-        Assert.AreEqual("c1-1;", sb.ToString());
+            Go.Case(c1, i => sb.Append($"c1={i};")),
+            Go.Case(c2, i => sb.Append($"c2={i};")));
+        Assert.AreEqual("c1=1;", sb.ToString());
 
         await Go.Select(
-            Go.Case(c1, i => sb.Append($"c1-{i};")),
-            Go.Case(c2, i => sb.Append($"c2-{i};")));
-        Assert.AreEqual("c1-1;c2-2;", sb.ToString());
+            Go.Case(c1, i => sb.Append($"c1={i};")),
+            Go.Case(c2, i => sb.Append($"c2={i};")));
+        Assert.AreEqual("c1=1;c2=2;", sb.ToString());
+    }
+
+    [TestMethod]
+    public async Task MultiChannels_SelectCanShareLambdas()
+    {
+        var c1 = new Channel<int>();
+        var c2 = new Channel<int>();
+        var c3 = new Channel<string>();
+
+        var sb = new StringBuilder();
+
+        var t1 = c1.Send(1); // don't wait for the sends to complete, they won't until later
+        var t2 = c2.Send(2);
+        var t3 = c3.Send("3");
+
+        // it frees up after the first time it's hit
+        await Go.Select(
+            Go.Case(new[] { c1, c2 } , i => sb.Append($"cx={i};")),
+            Go.Case(c3, i => sb.Append($"c3={i};")));
+        Assert.AreEqual("cx=1;", sb.ToString());
+
+        await Go.Select(
+            Go.Case(new[] { c1, c2 }, i => sb.Append($"cx={i};")),
+            Go.Case(c3, i => sb.Append($"c3={i};")));
+        Assert.AreEqual("cx=1;cx=2;", sb.ToString());
+
+        await Go.Select(
+            Go.Case(new[] { c1, c2 }, i => sb.Append($"cx={i};")),
+            Go.Case(c3, i => sb.Append($"c3={i};")));
+        Assert.AreEqual("cx=1;cx=2;c3=3;", sb.ToString());
+
     }
 }
 

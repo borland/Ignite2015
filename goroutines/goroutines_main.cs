@@ -12,21 +12,23 @@ class MainClass
     {
         //basic.Run();
         //crc_basic.Run();
-        //crc_concurrent.Run().Wait();
+        crc_concurrent.Run().Wait();
 
-        FanOutIn().Wait();
+        //FanOutIn().Wait();
     }
 
     public static async Task FanOutIn()
     {
         var numbers = new Channel<int>();
         var letters = new Channel<char>();
+        var done = new Channel<bool>();
 
         Go.Run(async () => {
             for (int i = 0; i < 10; i++)
                 await numbers.Send(i);
 
             Console.WriteLine("numbers all sent");
+            await done.Send(true);
         });
 
         Go.Run(async () => {
@@ -40,9 +42,11 @@ class MainClass
             }
 
             Console.WriteLine("letters all sent");
+            await done.Send(true);
         });
 
-        while(true)
+        int doneCount = 0;
+        while(doneCount < 2)
         {
             await Go.Select(
                 Go.Case(numbers, num => {
@@ -50,8 +54,8 @@ class MainClass
                 }),
                 Go.Case(letters, ch => {
                     Console.WriteLine($"Got {ch}");
-                }));
+                }),
+                Go.Case(done, t => doneCount++));
         }
-
     }
 }
