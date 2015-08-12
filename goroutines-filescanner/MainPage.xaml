@@ -1,0 +1,32 @@
+﻿<Page
+    x:Class="goroutines_filescanner.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:goroutines_filescanner"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <RelativePanel Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Button x:Name="selectFolder" Content="Select Folder"
+                Click="selectFolder_Click"
+                RelativePanel.AlignLeftWithPanel="True"
+                RelativePanel.AlignTopWithPanel="True"/>
+        <TextBox x:Name="textBox" HorizontalAlignment="Stretch" TextWrapping="NoWrap" Text="TextBox"
+                 RelativePanel.AlignTopWithPanel="True"
+                 RelativePanel.RightOf="selectFolder"
+                 RelativePanel.LeftOf="go"/>
+        <Button x:Name="go" Content="Go"
+                Click="go_Click"
+                RelativePanel.AlignRightWithPanel="True"
+                RelativePanel.AlignTopWithPanel="True"/>
+        <GridView x:Name="grid"
+                  RelativePanel.AlignBottomWithPanel="True"
+                  RelativePanel.AlignLeftWithPanel="True"
+                  RelativePanel.AlignRightWithPanel="True"
+                  RelativePanel.Below="textBox">
+            
+        </GridView>
+
+    </RelativePanel>
+
+</Page>

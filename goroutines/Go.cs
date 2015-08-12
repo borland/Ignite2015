@@ -268,6 +268,21 @@ public class Channel<T>
     // TODO we should be able to adapt a channel into an enumerable of sorts once we've implemented close
 }
 
+public static class ChannelExtensions
+{
+    /// <summary>We can't adapt normal foreach because we want it to be async</summary>
+    /// <typeparam name="T"></typeparam>
+    /// <param name="channel"></param>
+    /// <param name="action"></param>
+    public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
+    {
+        while(channel.IsOpen) {
+            var item = await channel.Receive();
+            action(item);
+        }
+    }
+}
+
 public class WaitGroup
 {
     readonly TaskCompletionSource<bool> m_tcs = new TaskCompletionSource<bool>();

@@ -1,0 +1,8 @@
+﻿<Application
+    x:Class="goroutines_filescanner.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:goroutines_filescanner"
+    RequestedTheme="Light">
+
+</Application>
