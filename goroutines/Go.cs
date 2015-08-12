@@ -35,12 +35,10 @@ public static class Go
         // so that we can cancel the receive on c1 when c2 arrives with a value
         // but do so in a thread-safe way
         var tasks = cases.Select(c => c.SelectAsync(sync)).ToArray();
-        var completedTask = await Task.WhenAny(tasks);
+        var completedTask = await Task.WhenAny(tasks).ConfigureAwait(false);
         
         foreach (var c in cases)
             c.ApplyResultIfIsMyTask(completedTask);
-
-        return;
     }
 
     public interface ISelectCase
@@ -63,7 +61,7 @@ public static class Go
                 return Task.FromResult(false);
 
             var r = new SelectCaseReceiver<T>(sync);
-            return Task = Channel.ReceiveInto(r).ContinueWith(t => Result = t.Result);
+            return Task = Channel.ReceiveInto(r).ContinueWith(t => Result = t.Result, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         public void ApplyResultIfIsMyTask(Task task)
@@ -85,7 +83,7 @@ public static class Go
         {
             var r = new SelectCaseReceiver<T>(sync);
             return Task = Task.WhenAny(
-                Channels.Select(c => c.ReceiveInto(r).ContinueWith(t => Result = t.Result)));
+                Channels.Select(c => c.ReceiveInto(r).ContinueWith(t => Result = t.Result, TaskContinuationOptions.ExecuteSynchronously)));
         }
 
         public void ApplyResultIfIsMyTask(Task task)
@@ -190,6 +188,27 @@ public class AwaitableQueue<T>
             }
         }
     }
+    
+    /// <summary>Dumps the queue and completes all the promised tasks pushing the given value</summary>
+    /// <returns>The queue before we dumped it</returns>
+    public T[] CompleteAll(T with = default(T))
+    {
+        T[] queue;
+        TaskCompletionSource<T>[] promises;
+        lock (m_queue)
+        {
+            queue = m_queue.ToArray();
+            m_queue.Clear();
+
+            promises = m_promises.ToArray();
+            m_promises.Clear();
+        }
+
+        foreach (var p in promises)
+            p.SetResult(with);
+
+        return queue;
+    }
 }
 
 public class Channel<T>
@@ -205,7 +224,7 @@ public class Channel<T>
             throw new InvalidOperationException("channel closed");
 
         while (true) {
-            var receiver = await m_receivers.Dequeue();
+            var receiver = await m_receivers.Dequeue().ConfigureAwait(false);
             if (receiver.TryReceive(value))
                 break; // else we lost the race with another sender, wait for the next one
         }
@@ -227,13 +246,50 @@ public class Channel<T>
         return receiver.ReceivedValue;
     }
 
-    public bool Close() => m_isOpen = false;
+    class ChannelClosedReceiver : IReceiver<T>
+    {
+        public Task<T> ReceivedValue => Task.FromResult(default(T));
+        public bool TryReceive(T value) => true;
+    }
+
+    public bool Close() { // nuke all waiting tasks
+        m_isOpen = false;
+        var queued = m_receivers.CompleteAll(with: new ChannelClosedReceiver());
+        foreach (var x in queued)
+            x.TryReceive(default(T));
+
+        return false;
+    }
 
     public bool IsOpen => m_isOpen;
 
     // TODO unit tests for closing of channels
 
-    // TODO we should be able to adapt a channel into an enumerable of sorts
+    // TODO we should be able to adapt a channel into an enumerable of sorts once we've implemented close
+}
+
+public class WaitGroup
+{
+    readonly TaskCompletionSource<bool> m_tcs = new TaskCompletionSource<bool>();
+    int m_count = 0;
+
+    public int Add(int n)
+    {
+        var count = Interlocked.Add(ref m_count, n);
+        if (count <= 0)
+            throw new InvalidOperationException("WaitGroup count went below zero"); // go panics when you ADD to a waitgroup that has gone below zero. Weird
+        return count;
+    }
+
+    public int Done()
+    {
+        var count = Interlocked.Decrement(ref m_count);
+        if (count == 0)
+            m_tcs.TrySetResult(true);
+        return count;
+    }
+
+    public Task<bool> Wait() => m_tcs.Task;
 }
 
 public class BufferedChannel<T> : Channel<T>

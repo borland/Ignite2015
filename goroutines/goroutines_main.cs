@@ -12,9 +12,9 @@ class MainClass
     {
         //basic.Run();
         //crc_basic.Run();
-        //crc_concurrent.Run().Wait();
+        crc_concurrent.Run().Wait();
 
-        FanOutIn().Wait();
+        //FanOutIn().Wait();
     }
 
     public static async Task FanOutIn()

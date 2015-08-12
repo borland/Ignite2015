@@ -264,4 +264,132 @@ public class TestChannel_Select
     }
 }
 
+[TestClass]
+public class TestChannel_Closing
+{
+    [TestMethod]
+    public void ReceiveOnClosedChannelReturnsDefault()
+    {
+        var ci = new Channel<int>();
+        ci.Close();
+        Assert.AreEqual(0, ci.Receive().Result);
 
+        var cs = new Channel<string>();
+        cs.Close();
+        Assert.AreEqual(null, cs.Receive().Result);
+    }
+
+    [TestMethod]
+    public void SendOnClosedChannelThrows()
+    {
+        var ci = new Channel<int>();
+        ci.Close();
+        var ex = ExAssert.Catch(new Action(() => ci.Send(1).Wait()));
+        Assert.IsInstanceOfType(ex.InnerException, typeof(InvalidOperationException));
+
+        ex = null;
+
+        var cs = new Channel<string>();
+        cs.Close();
+        ex = ExAssert.Catch(new Action(() => cs.Send("a").Wait()));
+        Assert.IsInstanceOfType(ex.InnerException, typeof(InvalidOperationException));
+    }
+
+    [TestMethod]
+    public void ReceiveOnClosedChannelCompletesExistingBlockedThingsFirst()
+    {
+        var ci = new Channel<int>();
+        var t1 = ci.Send(1); // cheating here by not awaiting
+        var t2 = ci.Send(2); // cheating here by not awaiting
+        ci.Close();
+        Assert.AreEqual(1, ci.Receive().Result);
+        Assert.AreEqual(2, ci.Receive().Result);
+        Assert.AreEqual(0, ci.Receive().Result);
+    }
+
+    [TestMethod]
+    public void ReceiveOnClosedChannelEmptiesBufferFirst()
+    {
+        var ci = new BufferedChannel<int>(2);
+        ci.Send(1).Wait();
+        ci.Send(2).Wait();
+        ci.Close();
+        Assert.AreEqual(1, ci.Receive().Result);
+        Assert.AreEqual(2, ci.Receive().Result);
+        Assert.AreEqual(0, ci.Receive().Result);
+    }
+
+    [TestMethod]
+    public void ClosingAReceivingChannelCompletesItImmediatelyWithDefault()
+    {
+        // this tests all things in m_queue not in m_promises; we need some other thing for that
+        var ci = new Channel<int>();
+        Go.Run(async () => {
+            await Task.Delay(25); // let the Receive begin
+            ci.Close();
+        });
+        var i = ci.Receive().Result;
+        
+        Assert.AreEqual(0, i);
+    }
+
+    [TestMethod]
+    public void ClosingASelectedChannelCompletesItImmediatelyWithNoCallback()
+    {
+        var ci = new Channel<int>();
+        var hits = new List<int>();
+        Go.Run(async () => {
+            await Task.Delay(25); // let the Receive begin
+            ci.Close();
+        });
+        Go.Select(
+            Go.Case(ci, hits.Add)).Wait(); // if the channel doesn't complete our unit test will hang and we'll find out the hard way
+
+        Assert.AreEqual(0, hits.Count);
+    }
+
+    [TestMethod]
+    public void SelectOnClosedChannelReturnsImmediately()
+    {
+        var ci = new Channel<int>(); ci.Close();
+        var hits = new List<int>();
+        Go.Select(
+            Go.Case(ci, hits.Add)).Wait(); // if the channel doesn't complete our unit test will hang and we'll find out the hard way
+
+        Assert.AreEqual(0, hits.Count);
+    }
+
+    [TestMethod]
+    public async Task SelectIgnoresClosedChannels()
+    {
+        var ci = new Channel<int>();
+        var t1 = ci.Send(1);
+
+        var cs = new Channel<string>();
+        cs.Close();
+
+        var hits = new List<object>();
+        await Go.Select(
+            Go.Case(ci, i => hits.Add(i)),
+            Go.Case(cs, s => hits.Add(s)));
+
+        Assert.AreEqual(1, hits.Count);
+        Assert.AreEqual(1, hits[0]);
+    }
+}
+
+public static class ExAssert
+{
+    public static Exception Catch(Action throws)
+    {
+        try
+        {
+            throws();
+        }
+        catch(Exception e)
+        {
+            return e;
+        }
+        return null;
+    }
+}

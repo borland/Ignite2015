@@ -16,51 +16,69 @@ struct CrcResult {
 
 class crc_concurrent
 {
-	static async void CalcCrc32(string filePath, Channel<CrcResult> results, Channel<int> refCount) {
-		var buffer = File.ReadAllBytes(filePath);
-		
-		await results.Send(new CrcResult {
-			Value = DamienG.Security.Cryptography.Crc32.Compute(buffer),
-			Path = filePath
-		});
-        await refCount.Send(-1);
+	static async Task CalcCrc32(string filePath, Channel<CrcResult> results, Channel<Exception> errors, WaitGroup wg) {
+        try
+        {
+            var buffer = File.ReadAllBytes(filePath);
+            if (buffer.Length < 1) // simulate an exception
+            {
+                await errors.Send(new Exception($"0 byte file at {filePath}"));
+                return;
+            }
+
+            await results.Send(new CrcResult {
+                Value = DamienG.Security.Cryptography.Crc32.Compute(buffer),
+                Path = filePath
+            });
+        }
+        catch(Exception e)
+        {
+            await errors.Send(e);
+        }
+        finally
+        {
+            wg.Done();
+        }
 	}
 
-	static async Task ScanDir(string dir, Channel<CrcResult> results, Channel<int> refCount) {
+	static void ScanDir(string dir, Channel<CrcResult> results, Channel<Exception> errors, WaitGroup wg) {
 		foreach(var f in Directory.GetFiles(dir)) {
 			var absPath = Path.Combine(dir, f);
-            await refCount.Send(1);
-			Go.Run(CalcCrc32, absPath, results, refCount);
+            wg.Add(1);
+			Go.Run(CalcCrc32, absPath, results, errors, wg);
 		}
 		foreach(var d in Directory.GetDirectories(dir)) {
 			var absPath = Path.Combine(dir, d);
-            await refCount.Send(1);
-            Go.Run(ScanDir, absPath, results, refCount);
+            wg.Add(1);
+            Go.Run(ScanDir, absPath, results, errors, wg);
 		}
-        await refCount.Send(-1);
+        wg.Done();
     }
 
     public static async Task Run()
     {
         var results = new Channel<CrcResult>();
-        var refCount = new BufferedChannel<int>(2);
-        await refCount.Send(100);
-        Go.Run(ScanDir, "/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, refCount);
+        var errors = new Channel<Exception>();
+        var wg = new WaitGroup();
+        wg.Add(1);
 
-        int rc = 0;
+        Go.Run(async () => { // close the channels when the waitGroup signals
+            await wg.Wait();
+            results.Close();
+            errors.Close();
+        });
+        Go.Run(ScanDir, "/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, errors, wg);
+
         int totalFiles = 0;
-        for (var stop = false; !stop;) {
+        while(results.IsOpen || errors.IsOpen) {
             await Go.Select(
                 Go.Case(results, r => {
                     Console.WriteLine($"Got {r.Value} for {r.Path}");
                     totalFiles++;
                 }),
-                Go.Case(refCount, delta => {
-                    rc += delta;
-                    if (rc == 0) {
-                        Console.WriteLine("all done");
-                        stop = true;
-                    }
+                Go.Case(errors, exception => {
+                    Console.WriteLine($"EXCEPTION: {exception}");
+                    totalFiles++;
                 }));
         }
 
