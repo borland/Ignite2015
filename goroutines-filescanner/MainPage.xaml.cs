@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -30,10 +31,21 @@ namespace goroutines_filescanner
     /// </summary>
     public sealed partial class MainPage : Page
     {
+        class FileInfo
+        {
+            public string Name { get; set; }
+            public string Path { get; set; }
+            public UInt64 Size { get; set; }
+            public string Sha1 { get; set; }
+        }
+
+        ObservableCollection<FileInfo> m_fileInfos = new ObservableCollection<FileInfo>();
+
         public MainPage()
         {
             this.InitializeComponent();
             textBox.Text = "";
+            listView.ItemsSource = m_fileInfos;
         }
 
         private async void selectFolder_Click(object sender, RoutedEventArgs e)
@@ -65,50 +77,57 @@ namespace goroutines_filescanner
             return unsnapped;
         }
 
-        struct FileInfo
-        {
-            public string Name;
-            public string Path;
-            public UInt64 Size;
-            public string Sha1; 
-        }
-
         private async void go_Click(object sender, RoutedEventArgs e)
         {
             var folder = await StorageFolder.GetFolderFromPathAsync(textBox.Text);
             var results = new Channel<FileInfo>();
 
-            Go.Run(scanDir, folder, results);
+            Go.Run(scanDir, folder, true, results);
 
             await results.ForEach(fi => {
-                var gi = new GridViewItem();
-                gi.Content = fi.Name;
-                grid.Items.Add(gi);
+                m_fileInfos.Add(fi);
             });
         }
 
-        private async Task scanDir(StorageFolder folder, Channel<FileInfo> results)
+        private async Task scanDir(StorageFolder storageFolder, bool doSha1, Channel<FileInfo> results)
         {
             var sha1 = HashAlgorithmProvider.OpenAlgorithm(HashAlgorithmNames.Sha1);
+            var wg = new WaitGroup();
 
-            foreach(var fi in await folder.GetItemsAsync()) {
-                var sf = fi as StorageFile;
-                if (sf == null)
-                    continue;
-                
-                var basicProps = await sf.GetBasicPropertiesAsync();
-                IBuffer buffer;
-                using (var stream = await sf.OpenAsync(FileAccessMode.Read)) {
-                    buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
-
-                    await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
+            foreach (var entry in await storageFolder.GetItemsAsync()) {
+                var folder = entry as StorageFolder; // folder
+                if(folder != null) {
+                    var innerResults = new Channel<FileInfo>();
+                    Go.Run(scanDir, folder, false, innerResults);
+                    var totalSize = await innerResults.Sum(f => f.Size);
+                    await results.Send(new FileInfo { Name = folder.Name, Size = totalSize });
                 }
-                    
-                var hash = sha1.HashData(buffer);
-                var hashBytes = new byte[hash.Length];
-                hash.CopyTo(hashBytes);
 
-                await results.Send(new FileInfo { Name = fi.Name, Sha1 = Convert.ToBase64String(hashBytes) });
+                var file = entry as StorageFile; // file
+                if (file != null) {
+                    var basicProps = await file.GetBasicPropertiesAsync();
+
+                    string sha1str = null;
+                    if (doSha1) {
+                        IBuffer buffer;
+                        using (var stream = await file.OpenAsync(FileAccessMode.Read)) {
+                            buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
+                            await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
+                        }
+
+                        var hash = sha1.HashData(buffer);
+                        var hashBytes = new byte[hash.Length];
+                        hash.CopyTo(hashBytes);
+                        sha1str = Convert.ToBase64String(hashBytes);
+                    }
+
+                    await results.Send(new FileInfo {
+                        Name = entry.Name,
+                        Path = entry.Path,
+                        Sha1 = sha1str,
+                        Size = basicProps.Size,
+                    });
+                }
             }
             results.Close();
         }

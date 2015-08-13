@@ -67,7 +67,7 @@ class crc_concurrent
             results.Close();
             errors.Close();
         });
-        Go.Run(ScanDir, "/Users/orione/OneDrive/Ignite2015/dev/goroutines", results, errors, wg);
+        Go.Run(ScanDir, "/Users/orion/OneDrive/Ignite2015/dev/goroutines", results, errors, wg);
 
         int totalFiles = 0;
         while(results.IsOpen || errors.IsOpen) {

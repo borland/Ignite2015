@@ -47,17 +47,17 @@ public static class Go
         void ApplyResultIfIsMyTask(Task task);
     }
 
-    public class SelectCase<T> : ISelectCase
+    class SelectCase<T> : ISelectCase
     {
         public Channel<T> Channel;
-        public Action<T> Action;
+        public Action<T, bool> Action;
 
         Task Task;
-        T Result = default(T);
+        Tuple<T, bool> Result = null;
 
         public Task SelectAsync(Func<bool> sync)
         {
-            if (!Channel.IsOpen)
+            if (Channel == null || !Channel.IsOpen)
                 return Task.FromResult(false);
 
             var r = new SelectCaseReceiver<T>(sync);
@@ -67,17 +67,17 @@ public static class Go
         public void ApplyResultIfIsMyTask(Task task)
         {
             if (task == Task)
-                Action(Result);
+                Action(Result.Item1, Result.Item2);
         }
     }
 
-    public class MultiSelectCase<T> : ISelectCase
+    class MultiSelectCase<T> : ISelectCase
     {
         public IEnumerable<Channel<T>> Channels;
-        public Action<T> Action;
+        public Action<T, bool> Action;
 
         Task Task;
-        T Result = default(T);
+        Tuple<T, bool> Result = null;
 
         public Task SelectAsync(Func<bool> sync)
         {
@@ -89,34 +89,40 @@ public static class Go
         public void ApplyResultIfIsMyTask(Task task)
         {
             if (task == Task)
-                Action(Result);
+                Action(Result.Item1, Result.Item2);
         }
     }
 
-    public static MultiSelectCase<T> Case<T>(IEnumerable<Channel<T>> channels, Action<T> action)
+    public static ISelectCase Case<T>(IEnumerable<Channel<T>> channels, Action<T> action)
+        => new MultiSelectCase<T> { Channels = channels, Action = (x, _) => action(x) };
+
+    public static ISelectCase Case<T>(IEnumerable<Channel<T>> channels, Action<T, bool> action)
         => new MultiSelectCase<T> { Channels = channels, Action = action };
 
-    public static SelectCase<T> Case<T>(Channel<T> channel, Action<T> action)
+    public static ISelectCase Case<T>(Channel<T> channel, Action<T> action)
+        => new SelectCase<T> { Channel = channel, Action = (x, _) => action(x) };
+
+    public static ISelectCase Case<T>(Channel<T> channel, Action<T, bool> action)
         => new SelectCase<T> { Channel = channel, Action = action };
 }
 
 public interface IReceiver<T>
 {
-    bool TryReceive(T value);
-    Task<T> ReceivedValue { get; }
+    bool TryReceive(T value, bool isValid);
+    Task<Tuple<T, bool>> ReceivedValue { get; }
 }
 
 public class Receiver<T> : IReceiver<T>
 {
-    protected readonly TaskCompletionSource<T> m_tcs = new TaskCompletionSource<T>();
+    protected readonly TaskCompletionSource<Tuple<T, bool>> m_tcs = new TaskCompletionSource<Tuple<T, bool>>();
 
-    public virtual bool TryReceive(T value)
+    public virtual bool TryReceive(T value, bool isValid)
     {
-        m_tcs.SetResult(value);
+        m_tcs.SetResult(Tuple.Create(value, isValid));
         return true;
     }
 
-    public Task<T> ReceivedValue => m_tcs.Task;
+    public Task<Tuple<T, bool>> ReceivedValue => m_tcs.Task;
 }
 
 public class SelectCaseReceiver<T> : Receiver<T>
@@ -126,10 +132,10 @@ public class SelectCaseReceiver<T> : Receiver<T>
     public SelectCaseReceiver(Func<bool> sync)
     { m_sync = sync; }
 
-    public override bool TryReceive(T value)
+    public override bool TryReceive(T value, bool isValid)
     {
         if (m_sync()) { // we won the race
-            m_tcs.SetResult(value);
+            m_tcs.SetResult(Tuple.Create(value, isValid));
             return true;
         }
         return false; // we lost the race
@@ -189,24 +195,17 @@ public class AwaitableQueue<T>
         }
     }
     
-    /// <summary>Dumps the queue and completes all the promised tasks pushing the given value</summary>
+    /// <summary>Dumps the queue. Does not touch promised tasks</summary>
     /// <returns>The queue before we dumped it</returns>
-    public T[] CompleteAll(T with = default(T))
+    public T[] ClearQueue()
     {
         T[] queue;
-        TaskCompletionSource<T>[] promises;
         lock (m_queue)
         {
             queue = m_queue.ToArray();
             m_queue.Clear();
-
-            promises = m_promises.ToArray();
-            m_promises.Clear();
         }
-
-        foreach (var p in promises)
-            p.SetResult(with);
-
+        
         return queue;
     }
 }
@@ -225,19 +224,25 @@ public class Channel<T>
 
         while (true) {
             var receiver = await m_receivers.Dequeue().ConfigureAwait(false);
-            if (receiver.TryReceive(value))
+            if (receiver.TryReceive(value, true))
                 break; // else we lost the race with another sender, wait for the next one
         }
     }
 
-    public Task<T> Receive() => ReceiveInto(new Receiver<T>());
+    public Task<T> Receive() => ReceiveInto(new Receiver<T>())
+        .ContinueWith(
+            t => t.Result.Item1,
+            TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously);
+    
+    public Task<Tuple<T, bool>> ReceiveEx() => ReceiveInto(new Receiver<T>());
 
-    public virtual Task<T> ReceiveInto(IReceiver<T> receiver)
+    public virtual Task<Tuple<T, bool>> ReceiveInto(IReceiver<T> receiver)
     {
         // in go, a receive from a closed channel returns the zero value immediately
-        if (!m_isOpen) {
-            receiver.TryReceive(default(T));
-            return Task.FromResult(default(T));
+        // unless there are "unfinished" senders
+        if (!m_isOpen && m_receivers.PromisedCount == 0) {
+            receiver.TryReceive(default(T), false);
+            return Task.FromResult(Tuple.Create(default(T), false));
         }
 
         m_receivers.Enqueue(receiver);
@@ -245,18 +250,12 @@ public class Channel<T>
         // we can always block forever, it's not like Select where we have to retry
         return receiver.ReceivedValue;
     }
-
-    class ChannelClosedReceiver : IReceiver<T>
-    {
-        public Task<T> ReceivedValue => Task.FromResult(default(T));
-        public bool TryReceive(T value) => true;
-    }
-
+    
     public bool Close() { // nuke all waiting tasks
         m_isOpen = false;
-        var queued = m_receivers.CompleteAll(with: new ChannelClosedReceiver());
+        var queued = m_receivers.ClearQueue();
         foreach (var x in queued)
-            x.TryReceive(default(T));
+            x.TryReceive(default(T), false);
 
         return false;
     }
@@ -276,10 +275,26 @@ public static class ChannelExtensions
     /// <param name="action"></param>
     public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
     {
-        while(channel.IsOpen) {
-            var item = await channel.Receive();
-            action(item);
+        while(true) {
+            var t = await channel.ReceiveEx();
+            if (!t.Item2)
+                return;
+            action(t.Item1);
         }
+    }
+
+    public static async Task<int> Sum<T>(this Channel<T> channel, Func<T, int> selector)
+    {
+        int sum = 0;
+        await ForEach(channel, x => sum += selector(x));
+        return sum;
+    }
+
+    public static async Task<ulong> Sum<T>(this Channel<T> channel, Func<T, ulong> selector)
+    {
+        ulong sum = 0;
+        await ForEach(channel, x => sum += selector(x));
+        return sum;
     }
 }
 
@@ -304,7 +319,7 @@ public class WaitGroup
         return count;
     }
 
-    public Task<bool> Wait() => m_tcs.Task;
+    public Task<bool> Wait() => m_count == 0 ? Task.FromResult(true) : m_tcs.Task;
 }
 
 public class BufferedChannel<T> : Channel<T>
@@ -335,14 +350,14 @@ public class BufferedChannel<T> : Channel<T>
         return base.Send(valueToSend);
     }
 
-    public override Task<T> ReceiveInto(IReceiver<T> receiver)
+    public override Task<Tuple<T, bool>> ReceiveInto(IReceiver<T> receiver)
     {
         lock (m_buffer) {
             if(m_buffer.Count > 0) {
                 var value = m_buffer.Peek();
-                if (receiver.TryReceive(value))
+                if (receiver.TryReceive(value, true)) // values dequeued from a buffer are always valid
                     m_buffer.Dequeue();
-                return Task.FromResult(value);
+                return Task.FromResult(Tuple.Create(value, true));
             }
         }
         // else the buffer is empty, act like a normal queue

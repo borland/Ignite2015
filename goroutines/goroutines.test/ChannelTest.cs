@@ -302,9 +302,9 @@ public class TestChannel_Closing
         var t1 = ci.Send(1); // cheating here by not awaiting
         var t2 = ci.Send(2); // cheating here by not awaiting
         ci.Close();
-        Assert.AreEqual(1, ci.Receive().Result);
-        Assert.AreEqual(2, ci.Receive().Result);
-        Assert.AreEqual(0, ci.Receive().Result);
+        Assert.AreEqual(Tuple.Create(1, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(Tuple.Create(2, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
     }
 
     [TestMethod]
@@ -314,9 +314,9 @@ public class TestChannel_Closing
         ci.Send(1).Wait();
         ci.Send(2).Wait();
         ci.Close();
-        Assert.AreEqual(1, ci.Receive().Result);
-        Assert.AreEqual(2, ci.Receive().Result);
-        Assert.AreEqual(0, ci.Receive().Result);
+        Assert.AreEqual(Tuple.Create(1, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(Tuple.Create(2, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
     }
 
     [TestMethod]
@@ -328,28 +328,27 @@ public class TestChannel_Closing
             await Task.Delay(25); // let the Receive begin
             ci.Close();
         });
-        var i = ci.Receive().Result;
-        
-        Assert.AreEqual(0, i);
+
+        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
     }
 
     [TestMethod]
-    public void ClosingASelectedChannelCompletesItImmediatelyWithNoCallback()
+    public void ClosingASelectedChannelCompletesItImmediatelySignallingChannelClosed()
     {
         var ci = new Channel<int>();
-        var hits = new List<int>();
+        var hits = new List<Tuple<int, bool>>();
         Go.Run(async () => {
             await Task.Delay(25); // let the Receive begin
             ci.Close();
         });
         Go.Select(
-            Go.Case(ci, hits.Add)).Wait(); // if the channel doesn't complete our unit test will hang and we'll find out the hard way
+            Go.Case(ci, (v, ok) => hits.Add(Tuple.Create(v, ok)))).Wait(); // if the channel doesn't complete our unit test will hang and we'll find out the hard way
 
-        Assert.AreEqual(0, hits.Count);
+        CollectionAssert.AreEqual(new[] { Tuple.Create(0, false) }, hits);
     }
 
     [TestMethod]
-    public void SelectOnClosedChannelReturnsImmediately()
+    public void SelectOnClosedChannelReturnsImmediatelyWithoutSignalling()
     {
         var ci = new Channel<int>(); ci.Close();
         var hits = new List<int>();
@@ -357,6 +356,21 @@ public class TestChannel_Closing
             Go.Case(ci, hits.Add)).Wait(); // if the channel doesn't complete our unit test will hang and we'll find out the hard way
 
         Assert.AreEqual(0, hits.Count);
+    }
+
+    [TestMethod]
+    public async Task SelectIgnoresNullChannels()
+    {
+        var ci = new Channel<int>();
+        var t1 = ci.Send(1);
+        
+        var hits = new List<object>();
+        await Go.Select(
+            Go.Case(ci, i => hits.Add(i)),
+            Go.Case((Channel<string>)null, s => hits.Add(s)));
+
+        Assert.AreEqual(1, hits.Count);
+        Assert.AreEqual(1, hits[0]);
     }
 
     [TestMethod]
