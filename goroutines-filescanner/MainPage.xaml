@@ -24,18 +24,23 @@
                   RelativePanel.AlignLeftWithPanel="True"
                   RelativePanel.AlignRightWithPanel="True"
                   RelativePanel.Below="textBox">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Grid HorizontalAlignment="Stretch" VerticalAlignment="Center">
+                    <Grid HorizontalAlignment="Stretch">
 
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120" />
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Column="1" Text="{Binding Name}" />
-                        <TextBlock Grid.Column="0" Text="{Binding Size}" />
+                        <TextBlock Grid.Column="0" Text="{Binding Size}" HorizontalAlignment="Left" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" HorizontalAlignment="Stretch" />
                         <TextBlock Grid.Column="2" Text="{Binding Sha1}" HorizontalAlignment="Right" />
                     </Grid>
 

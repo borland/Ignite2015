@@ -1,4 +1,10 @@
-﻿using System;
+﻿// This is free and unencumbered software released into the public domain.
+// Anyone is free to copy, modify, publish, use, compile, sell, or
+// distribute this software, either in source code form or as a compiled
+// binary, for any purpose, commercial or non-commercial, and by any
+// means.
+
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -109,16 +115,19 @@ namespace goroutines_filescanner
 
                     string sha1str = null;
                     if (doSha1) {
-                        IBuffer buffer;
-                        using (var stream = await file.OpenAsync(FileAccessMode.Read)) {
-                            buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
-                            await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
-                        }
+                        try {
+                            IBuffer buffer;
+                            using (var stream = await file.OpenAsync(FileAccessMode.Read)) {
+                                buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
+                                await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
+                            }
 
-                        var hash = sha1.HashData(buffer);
-                        var hashBytes = new byte[hash.Length];
-                        hash.CopyTo(hashBytes);
-                        sha1str = Convert.ToBase64String(hashBytes);
+                            var hash = sha1.HashData(buffer);
+                            var hashBytes = new byte[hash.Length];
+                            hash.CopyTo(hashBytes);
+                            sha1str = Convert.ToBase64String(hashBytes);
+                        }
+                        catch (UnauthorizedAccessException) { }
                     }
 
                     await results.Send(new FileInfo {
