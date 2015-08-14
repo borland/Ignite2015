@@ -16,7 +16,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 4000;
+        const int NumQueues = 2000;
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
         var memory = Process.GetCurrentProcess().VirtualMemorySize64;
@@ -28,7 +28,7 @@ class Program
         }
 
         var memory2 = Process.GetCurrentProcess().VirtualMemorySize64;
-        var diff = (double)(memory2 - memory) / (1024.0 * 1024.0);
+        var diff = (memory2 - memory) / (1024.0 * 1024.0);
 
         Console.WriteLine($"Queues consume {(int)diff} MB of virtual memory; About to process events"); Console.ReadLine();
         var sw = Stopwatch.StartNew();

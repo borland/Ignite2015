@@ -15,21 +15,10 @@ namespace optionals_enums
     {
         public static void Main(string[] args)
         {
-            ReadFile("c:\\temp\\test1.txt").Unwrap(
-                c => Console.WriteLine($"Word count is {WordCount(c)}"),
-                () => Console.WriteLine("warning: no file"));
+            var file = "c:\\temp\\test1.txt";
+            ReadFile(file);
         }
-
-        static Either<int, Exception> Divide(int a, int b)
-        {
-            if (b == 0)
-                return new ArgumentException("can't divide by zero");
-
-            return a / b;
-        }
-
-        static int WordCount(string x) =>  x.Split(' ').Length;
-
+        
         static Optional<string> ReadFile(string path)
         {
             if (!File.Exists(path))
@@ -44,5 +33,7 @@ namespace optionals_enums
                 return null;
             }
         }
+
+        static int WordCount(string x) => x.Split(' ').Length;
     }
 }

@@ -10,9 +10,9 @@ class MainClass
 {
     public static void Main(string[] args)
     {
-        //basic.Run();
+        basic.Run().Wait();
         //crc_basic.Run();
-        crc_concurrent.Run().Wait();
+        //crc_concurrent.Run().Wait();
 
         //FanOutIn().Wait();
     }

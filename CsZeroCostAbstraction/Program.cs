@@ -41,16 +41,6 @@ struct Metres
 
 class Program
 {
-    void Delay(Seconds howLong)
-    {
-
-    }
-
-    void Travel(Metres howFar)
-    {
-
-    }
-
     [MethodImpl(MethodImplOptions.NoInlining)]
     static double DoMaths()
     {
@@ -72,8 +62,8 @@ class Program
     static void Main(string[] args)
     {
         // ----- Memory -----
-        Console.WriteLine("Press enter to start memory stats");
-        Console.ReadLine();
+        WriteLine("Press enter to start memory stats");
+        ReadLine();
 
         var baseline = GC.GetTotalMemory(forceFullCollection: true);
         var darray = new double[1000000];
@@ -102,14 +92,14 @@ class Program
             DoMaths();
 
         sw.Stop();
-        Console.WriteLine($"raw maths took {sw.ElapsedMilliseconds}ms");
+        WriteLine($"raw maths took {sw.ElapsedMilliseconds}ms");
 
         sw.Restart();
         for (int i = 0; i < 50000000; i++)
             DoMathsWithStructs();
 
         sw.Stop();
-        Console.WriteLine($"struct maths took {sw.ElapsedMilliseconds}ms");
+        WriteLine($"struct maths took {sw.ElapsedMilliseconds}ms");
     }
 
 }

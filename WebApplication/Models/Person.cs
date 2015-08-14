@@ -13,13 +13,14 @@ namespace WebApplication.Models
     public class Person
     {
         public string Name { get; set; }
+        public Nullable<int> Age { get; set; }
         public Optional<string> Address { get; set; }
 
         static Person[] s_people = new[]
         {
-            new Person { Name = "Orion", Address = "Hamilton" },
+            new Person { Name = "Orion", Age = 33, Address = "Hamilton" },
             new Person { Name = "Anon" },
-            new Person { Name = "Bill Gates", Address = "A mansion" },
+            new Person { Name = "Bill Gates", Age = 100, Address = "A mansion" },
         };
 
         public static Person[] LoadAll() => s_people;

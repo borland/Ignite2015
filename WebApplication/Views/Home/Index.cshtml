@@ -29,6 +29,7 @@
 
     @Html.DataTable(Model, t => {
         t.Column("Name", m => m.Name);
+        t.Column("Age", m => m.Age);
         t.Column("Address", m => m.Address.UnsafeValue);
     }, new { @class="datatable", style="width:100%" })
 

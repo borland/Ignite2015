@@ -39,8 +39,8 @@ namespace WebApplication
 
             internal List<ColumnDefinition> Columns { get; } = new List<ColumnDefinition>();
 
-            public TableBuilder<T> Column(string title, Func<T, string> contents) => 
-                Column(title, x => new MvcHtmlString(html.Encode(contents(x))));
+            public TableBuilder<T> Column<TResult>(string title, Func<T, TResult> contents) => 
+                Column(title, unsafeContents: x => new MvcHtmlString(html.Encode($"{contents(x)}")));
 
             public TableBuilder<T> Column(string title, Func<T, IHtmlString> unsafeContents)
             {
