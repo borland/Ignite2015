@@ -16,7 +16,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 2000;
+        const int NumQueues = 10;
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
         var memory = Process.GetCurrentProcess().VirtualMemorySize64;
@@ -24,7 +24,7 @@ class Program
         // create all the queues
         var operations = new OperationState[NumQueues];
         for(int i = 0; i < NumQueues; i++) {
-            operations[i] = new OperationState { Queue = new SerialQueue() };
+            operations[i] = new OperationState { Queue = new ThreadQueue() };
         }
 
         var memory2 = Process.GetCurrentProcess().VirtualMemorySize64;
