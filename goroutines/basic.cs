@@ -17,6 +17,7 @@ class basic
     {
         await result.Send(a * b);
         await messages.Send("ok");
+        Console.WriteLine("mutliply done");
     }
 
     public static async Task Run()

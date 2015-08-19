@@ -16,10 +16,11 @@ class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 10;
+        const int NumQueues = 100;
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
-        var memory = Process.GetCurrentProcess().VirtualMemorySize64;
+        var vmem = Process.GetCurrentProcess().VirtualMemorySize64;
+        var amem = GC.GetTotalMemory(forceFullCollection:true);
 
         // create all the queues
         var operations = new OperationState[NumQueues];
@@ -27,22 +28,33 @@ class Program
             operations[i] = new OperationState { Queue = new ThreadQueue() };
         }
 
-        var memory2 = Process.GetCurrentProcess().VirtualMemorySize64;
-        var diff = (memory2 - memory) / (1024.0 * 1024.0);
+        var vmem2 = Process.GetCurrentProcess().VirtualMemorySize64;
+        var vdiff = Math.Round((vmem2 - vmem) / (1024.0), 2);
+        var amem2 = GC.GetTotalMemory(forceFullCollection: true);
+        var adiff = Math.Round((amem2 - amem) / (1024.0), 2);
 
-        Console.WriteLine($"Queues consume {(int)diff} MB of virtual memory; About to process events"); Console.ReadLine();
+        // put actual memory in as well as virtual
+        Console.WriteLine($"Memory Used: {adiff} KB, {vdiff} KB of virtual"); Console.ReadLine();
         var sw = Stopwatch.StartNew();
 
         // post all the events
-        
-        foreach(var op in operations) {
-            op.Queue.DispatchAsync(() => op.Document = ParseXml());
+        foreach (var op in operations) {
+            op.Queue.DispatchAsync(() => {
+                for(int i = 0; i < 3; i++)
+                    op.Document = ParseXml();
+            });
         }
         foreach (var op in operations) {
-            op.Queue.DispatchAsync(() => op.CD = GetCDByArtist(op.Document, "Bee Gees"));
+            op.Queue.DispatchAsync(() => {
+                for (int i = 0; i < 3; i++)
+                    op.CD = GetCDByArtist(op.Document, "Bee Gees");
+            });
         }
         foreach (var op in operations) {
-            op.Queue.DispatchSync(() => op.Price = GetPrice(op.CD));
+            op.Queue.DispatchSync(() => {
+                for (int i = 0; i < 3; i++)
+                    op.Price = GetPrice(op.CD);
+            });
         }
         foreach(var op in operations) {
             if(op.Price != 10.90)
@@ -122,6 +134,9 @@ sealed class ThreadQueue : IDispatchQueue, IDisposable
             Monitor.Pulse(m_asyncActions);
         }
     }
+
+    public IDisposable DispatchAfter(TimeSpan ts, Action action)
+    { throw new NotImplementedException(); }
 
     void ThreadProc()
     {

@@ -60,30 +60,29 @@ public struct Optional<T> where T : class
     public override bool Equals(object obj) => this == obj;
 
     public override int GetHashCode() => HasValue ? m_value.GetHashCode() : 0;
-}
 
-public static class OptionalExtensions
-{
-    public static T Unwrap<T>(this Optional<T> opt, T defaultValue) where T : class
+    // I'd like these to be extension methods, but they need to be "real" methods
+    // so they're not ambiguous with OptionalExtensionsForPlainTypes
+    public T Unwrap(T defaultValue)
     {
         if (defaultValue == null)
             throw new ArgumentException("Calling Unwrap with a defaultValue of null", "none");
-        return opt.HasValue ? opt.UnsafeValue : defaultValue;
+        return HasValue ? UnsafeValue : defaultValue;
     }
 
-    public static TResult Unwrap<T, TResult>(this Optional<T> opt, Func<T, TResult> some, TResult defaultValue = default(TResult)) where T :class
-        => Unwrap(opt, some, () => defaultValue);
+    public TResult Unwrap<TResult>(Func<T, TResult> some, TResult defaultValue = default(TResult))
+        => Unwrap(some, () => defaultValue);
 
-    public static TResult Unwrap<T, TResult>(this Optional<T> opt, Func<T, TResult> some, Func<TResult> none) where T : class
-        => opt.HasValue ? some(opt.UnsafeValue) : none();
+    public TResult Unwrap<TResult>(Func<T, TResult> some, Func<TResult> none)
+        => HasValue ? some(UnsafeValue) : none();
 
-    public static void Unwrap<T>(this Optional<T> opt, Action<T> some) where T : class
-        => Unwrap(opt, some, () => { });
+    public void Unwrap(Action<T> some)
+        => Unwrap(some, () => { });
 
-    public static void Unwrap<T>(this Optional<T> opt, Action<T> some, Action none) where T : class
+    public void Unwrap(Action<T> some, Action none)
     {
-        if (opt.HasValue)
-            some(opt.UnsafeValue);
+        if (HasValue)
+            some(UnsafeValue);
         else
             none();
     }
@@ -98,16 +97,16 @@ public static class OptionalExtensionsForPlainTypes
         return value != null ? value : defaultValue;
     }
 
-    public static TResult Unwrap<T, TResult>(this T value, Func<T, TResult> some, TResult defaultValue = default(TResult))
+    public static TResult Unwrap<T, TResult>(this T value, Func<T, TResult> some, TResult defaultValue = default(TResult)) where T : class
         => Unwrap(value, some, () => defaultValue);
 
-    public static TResult Unwrap<T, TResult>(this T value, Func<T, TResult> some, Func<TResult> none)
+    public static TResult Unwrap<T, TResult>(this T value, Func<T, TResult> some, Func<TResult> none) where T : class
         => value != null ? some(value) : none();
 
-    public static void Unwrap<T>(this T value, Action<T> some)
+    public static void Unwrap<T>(this T value, Action<T> some) where T : class
         => Unwrap(value, some, () => { });
 
-    public static void Unwrap<T>(this T value, Action<T> some, Action none)
+    public static void Unwrap<T>(this T value, Action<T> some, Action none) where T : class
     {
         if (value != null)
             some(value);

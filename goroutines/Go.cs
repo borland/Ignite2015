@@ -261,10 +261,6 @@ public class Channel<T>
     }
 
     public bool IsOpen => m_isOpen;
-
-    // TODO unit tests for closing of channels
-
-    // TODO we should be able to adapt a channel into an enumerable of sorts once we've implemented close
 }
 
 public static class ChannelExtensions

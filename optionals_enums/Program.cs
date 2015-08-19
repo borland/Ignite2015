@@ -16,7 +16,11 @@ namespace optionals_enums
         public static void Main(string[] args)
         {
             var file = "c:\\temp\\test1.txt";
-            ReadFile(file);
+            file.Unwrap(value => Console.WriteLine("value"), () => Console.WriteLine("none"));
+
+            ReadFile(file).Unwrap(
+                value => Console.WriteLine($"got {value}"),
+                () => Console.WriteLine("no value"));
         }
         
         static Optional<string> ReadFile(string path)
