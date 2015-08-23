@@ -58,7 +58,7 @@ namespace Dispatch.SerialQueueTest
     public class SerialQueueTest_DispatchAsync
     {
         MockThreadPool mockPool = new MockThreadPool(); // mstest creates a new instance for each test so we don't need things like BeforeEach
-        ClrThreadPool realPool = new ClrThreadPool();
+        TaskThreadPool realPool = new TaskThreadPool();
 
         [TestMethod]
         public void DispatchAsyncQueuesToThreadpool()

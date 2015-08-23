@@ -21,97 +21,14 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace Dispatch
 {
-    public interface IDispatchQueue : IDisposable
+    /// <summary>Implements a serial queue</summary>
+    public class SerialQueue : IDispatchQueue
     {
-        IDisposable DispatchAsync(Action action);
-        IDisposable DispatchAfter(TimeSpan dueTime, Action action);
-        void DispatchSync(Action action);
-    }
-
-    public interface IDispatchQueueInternal
-    {
-        void InternalVerifyQueue(IDispatchQueue otherQueue);
-    }
-
-    /// <summary>A serial queue needs a threadpool to run tasks on. You can provide your own implementation if you want to have a custom threadpool with it's own limits (e.g. no more than X concurrent threads)</summary>
-    public interface IThreadPool
-    {
-        void QueueWorkItem(Action action);
-        IDisposable Schedule(TimeSpan dueTime, Action action);
-    }
-
-    public class ClrThreadPool : IThreadPool
-    {
-        static ClrThreadPool s_default = new ClrThreadPool();
-        public static ClrThreadPool Default { get { return s_default; } }
-
-        public void QueueWorkItem(Action action)
-        { ThreadPool.QueueUserWorkItem(_ => action()); }
-
-        public IDisposable Schedule(TimeSpan dueTime, Action action)
-        { return new Timer(_ => action(), null, dueTime, TimeSpan.FromMilliseconds(-1)); }
-    }
-
-    public static class DispatchQueue
-    {
-        [ThreadStatic]
-        static IDispatchQueue s_currentQueue;
-
-        // this doesn't work for nested DispatchSync calls. Perhaps that's why apple don't allow it in GCD themselves?
-        public static void VerifyQueue(this IDispatchQueue queue)
-        {
-            var iq = queue as IDispatchQueueInternal;
-            if (iq != null)
-                iq.InternalVerifyQueue(s_currentQueue);
-        }
-
-        public static IDispatchQueue Current { get { return s_currentQueue; } }
-
-        public static IDispatchQueue SetCurrentQueue(IDispatchQueue queue)
-        {
-            var previousQueue = s_currentQueue;
-            s_currentQueue = queue;
-            return previousQueue;
-        }
-    }
-
-    public sealed class AnonymousDisposable : IDisposable
-    {
-        Action m_action;
-
-        public AnonymousDisposable(Action action)
-        {
-            Debug.Assert(action != null, "action must not be null");
-            m_action = action;
-        }
-
-        public void Dispose()
-        {
-            var handler = Interlocked.Exchange(ref m_action, null);  // only call once
-            if (handler != null)
-                handler();
-        }
-    }
-
-    public class SerialQueue : IDispatchQueue, IDispatchQueueInternal
-    {
-        public class UnhandledExceptionEventArgs : EventArgs
-        {
-            readonly Exception m_exception;
-            public UnhandledExceptionEventArgs(Exception exception)
-            { m_exception = exception; }
-
-            public Exception Exception { get { return m_exception; } }
-        }
-
         readonly IThreadPool m_threadPool;
-        readonly bool m_trackQueueForVerify = false;
 
         // lock-order: We must never hold both these locks concurrently
         readonly object m_schedulerLock = new object(); // acquire this before adding any async/timer actions
@@ -122,27 +39,31 @@ namespace Dispatch
         volatile bool m_asyncActionsAreProcessing = false; // acquire m_schedulerLock
         bool m_isDisposed = false; // acquire m_schedulerLock
 
-        public SerialQueue(IThreadPool threadpool, bool trackQueueForVerify = false)
+        /// <summary>Constructs a new SerialQueue backed by the given ThreadPool</summary>
+        /// <param name="threadpool">The threadpool to queue async actions to</param>
+        public SerialQueue(IThreadPool threadpool)
         {
             if (threadpool == null)
                 throw new ArgumentNullException("threadpool");
             
             m_threadPool = threadpool;
-            m_trackQueueForVerify = trackQueueForVerify;
         }
 
-        public SerialQueue(bool trackQueueForVerify = false) : this(ClrThreadPool.Default, trackQueueForVerify)
+        /// <summary>Constructs a new SerialQueue backed by the default TaskThreadPool</summary>
+        public SerialQueue() : this(TaskThreadPool.Default)
         { }
 
-        public void InternalVerifyQueue(IDispatchQueue otherQueue)
-        {
-            if (m_trackQueueForVerify && this != otherQueue)
-                throw new InvalidOperationException("On the wrong queue");
-        }
-
+        /// <summary>This event is raised whenever an asynchronous function (via DispatchAsync or DispatchAfter) 
+        /// throws an unhandled exception</summary>
         public event EventHandler<UnhandledExceptionEventArgs> UnhandledException;
 
-        public IDisposable DispatchAfter(TimeSpan dueTime, Action action)
+        /// <summary>Schedules the given action to run asynchronously on the queue after dueTime.</summary>
+        /// <remarks>The function is not guaranteed to run at dueTime as the queue may be busy, it will run when next able.</remarks>
+        /// <param name="dueTime">Delay before running the action</param>
+        /// <param name="action">The function to run</param>
+        /// <returns>A disposable token which you can use to cancel the async action if it has not run yet.
+        /// It is always safe to dispose this token, even if the async action has already run</returns>
+        public virtual IDisposable DispatchAfter(TimeSpan dueTime, Action action)
         {
             IDisposable cancel = null;
             IDisposable timer = null;
@@ -183,7 +104,11 @@ namespace Dispatch
             });
         }
 
-        public IDisposable DispatchAsync(Action action)
+        /// <summary>Schedules the given action to run asynchronously on the queue when it is available</summary>
+        /// <param name="action">The function to run</param>
+        /// <returns>A disposable token which you can use to cancel the async action if it has not run yet.
+        /// It is always safe to dispose this token, even if the async action has already run</returns>
+        public virtual IDisposable DispatchAsync(Action action)
         {
             lock (m_schedulerLock)
             {
@@ -193,8 +118,10 @@ namespace Dispatch
                 m_asyncActions.Add(action);
                 if (!m_asyncActionsAreProcessing)
                 {
+                    // even though we don't hold m_schedulerLock when asyncActionsAreProcessing is set to false
+                    // that should be OK as the only "contention" happens up here while we do hold it
                     m_asyncActionsAreProcessing = true;
-                    m_threadPool.QueueWorkItem(ProcessAsyncActions);
+                    m_threadPool.QueueWorkItem(ProcessAsync);
                 }
             }
 
@@ -204,8 +131,9 @@ namespace Dispatch
                     m_asyncActions.Remove(action);
             });
         }
-
-        void ProcessAsyncActions()
+        
+        /// <summary>Internal function which runs on the threadpool to execute the actual async actions</summary>
+        protected virtual void ProcessAsync()
         {
             bool schedulerLockTaken = false;
             try
@@ -215,12 +143,7 @@ namespace Dispatch
 
                 if (m_isDisposed)
                     return; // the actions will have been dumped, there's no point doing anything
-
-                // even though we don't hold m_schedulerLock when asyncActionsAreProcessing is set to false
-                // that should be OK as the only "contention" happens up here while we do hold it
-                if (m_trackQueueForVerify)
-                    DispatchQueue.SetCurrentQueue(this);
-
+                
                 while (m_asyncActions.Count > 0)
                 {
                     // get the head of the queue, then release the lock
@@ -250,16 +173,17 @@ namespace Dispatch
             }
             finally
             {
-                if (m_trackQueueForVerify)
-                    DispatchQueue.SetCurrentQueue(null);
-
                 m_asyncActionsAreProcessing = false;
                 if (schedulerLockTaken)
                     Monitor.Exit(m_schedulerLock);
             }
         }
 
-        public void DispatchSync(Action action)
+        /// <summary>Runs the given action on the queue.
+        /// Blocks until the action is fully complete.
+        /// This implementation will not switch threads to run the function</summary>
+        /// <param name="action">The function to run.</param>
+        public virtual void DispatchSync(Action action)
         {
             bool schedulerLockTaken = false;
             try
@@ -272,24 +196,12 @@ namespace Dispatch
 
                 if (!m_asyncActionsAreProcessing) // if there is any async stuff happening we must wait for it
                 {
-                    IDispatchQueue previousQueue = null;
-                    if (m_trackQueueForVerify)
-                        previousQueue = DispatchQueue.SetCurrentQueue(this);
-                    
                     Monitor.Exit(m_schedulerLock);
                     schedulerLockTaken = false;
 
                     // process the action
-                    try
-                    {
-                        lock (m_executionLock)
-                            action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw
-                    }
-                    finally
-                    {
-                        if (m_trackQueueForVerify)
-                            DispatchQueue.SetCurrentQueue(previousQueue);
-                    }
+                    lock (m_executionLock)
+                        action(); // DO NOT CATCH EXCEPTIONS. We're excuting synchronously so just let it throw
                 }
                 else
                 { // the queue is busy, we need to acquire the execution lock
@@ -320,8 +232,16 @@ namespace Dispatch
             }
         }
 
-        // dump the queue (which should cause any workers to stop after their current action)
+        /// <summary>Shuts down the queue. All unstarted async actions will be dropped,
+        /// and any future attempts to call one of the Dispatch functions will throw an
+        /// ObjectDisposedException</summary>
         public void Dispose()
+        { Dispose(true); }
+
+        /// <summary>Internal implementation of Dispose</summary>
+        /// <remarks>We don't have a finalizer (and nor should we) but this method is just following the MS-recommended dispose pattern just in case someone wants to add one in a derived class</remarks>
+        /// <param name="disposing">true if called via Dispose(), false if called via a Finalizer.</param>
+        protected virtual void Dispose(bool disposing)
         {
             IDisposable[] timers;
             lock (m_schedulerLock)
@@ -339,5 +259,4 @@ namespace Dispatch
                 t.Dispose();
         }
     }
-
 }

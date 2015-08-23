@@ -16,6 +16,7 @@
     <ReferencePath>$(ProgramFiles)\Common Files\microsoft shared\VSTT\$(VisualStudioVersion)\UITestExtensionPackages</ReferencePath>
     <IsCodedUITest>False</IsCodedUITest>
     <TestProjectType>UnitTest</TestProjectType>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -55,7 +56,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SerialQueue\SerialQueue.csproj">
-      <Project>{1c3670e2-a6fe-4715-939f-83eeba4b8db9}</Project>
+      <Project>{e470b429-5b84-4f4d-b8d3-19957f787f8e}</Project>
       <Name>SerialQueue</Name>
     </ProjectReference>
   </ItemGroup>
