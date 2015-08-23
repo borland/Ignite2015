@@ -159,10 +159,9 @@ namespace Dispatch
                         if (cancel == null || m_isDisposed) // we've been canceled OR the queue has been disposed
                             return;
 
-                        // we must call DispatchAsync while still holding m_schedulerLock to prevent a window where we get disposed right here
+                        // we must call DispatchAsync while still holding m_schedulerLock to prevent a window where we get disposed at this point
                         cancel = DispatchAsync(action); 
                     }
-
                 });
                 m_timers.Add(timer);
             }
@@ -200,6 +199,7 @@ namespace Dispatch
             }
 
             return new AnonymousDisposable(() => {
+                // we can't "take it out" of the threadpool as not all threadpools support that
                 lock (m_schedulerLock)
                     m_asyncActions.Remove(action);
             });
