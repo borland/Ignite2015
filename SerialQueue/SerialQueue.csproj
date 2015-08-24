@@ -33,6 +33,7 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <DocumentationFile>bin\Release\SerialQueue.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <None Include="project.json" />
@@ -43,7 +44,6 @@
     <Compile Include="Interfaces.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SerialQueue.cs" />
-    <Compile Include="SerialQueueV.cs" />
     <Compile Include="TaskThreadPoolImpl.cs" />
     <Compile Include="UnhandledExceptionEventArgs.cs" />
   </ItemGroup>

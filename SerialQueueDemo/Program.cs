@@ -12,20 +12,22 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using Dispatch;
+using System.IO;
 
 class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 100;
+        const int NumQueues = 3000;
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
         var vmem = Process.GetCurrentProcess().VirtualMemorySize64;
-        var amem = GC.GetTotalMemory(forceFullCollection:true);
+        var amem = GC.GetTotalMemory(forceFullCollection: true);
 
         // create all the queues
         var operations = new OperationState[NumQueues];
-        for(int i = 0; i < NumQueues; i++) {
+        for (int i = 0; i < NumQueues; i++)
+        {
             operations[i] = new OperationState { Queue = new ThreadQueue() };
         }
 
@@ -39,26 +41,30 @@ class Program
         var sw = Stopwatch.StartNew();
 
         // post all the events
-        foreach (var op in operations) {
+        foreach (var op in operations)
+        {
             op.Queue.DispatchAsync(() => {
-                for(int i = 0; i < 3; i++)
+                //for (int i = 0; i < 3; i++)
                     op.Document = ParseXml();
             });
         }
-        foreach (var op in operations) {
+        foreach (var op in operations)
+        {
             op.Queue.DispatchAsync(() => {
-                for (int i = 0; i < 3; i++)
+                //for (int i = 0; i < 3; i++)
                     op.CD = GetCDByArtist(op.Document, "Bee Gees");
             });
         }
-        foreach (var op in operations) {
+        foreach (var op in operations)
+        {
             op.Queue.DispatchSync(() => {
-                for (int i = 0; i < 3; i++)
+                //for (int i = 0; i < 3; i++)
                     op.Price = GetPrice(op.CD);
             });
         }
-        foreach(var op in operations) {
-            if(op.Price != 10.90)
+        foreach (var op in operations)
+        {
+            if (op.Price != 10.90)
                 Console.WriteLine($"queue broken!. price was {op.Price} instead of 10.90");
         }
         sw.Stop();
@@ -104,15 +110,22 @@ sealed class ThreadQueue : IDispatchQueue, IDisposable
         m_thread.Start();
     }
 
+    public void VerifyQueue()
+    {
+        if (Thread.CurrentThread != m_thread)
+            throw new InvalidOperationException("wrong thread");
+    }
+
     public IDisposable DispatchAsync(Action action)
     {
-        lock (m_asyncActions) {
+        lock (m_asyncActions)
+        {
             m_asyncActions.Add(action);
             Monitor.Pulse(m_asyncActions);
         }
 
         return new AnonymousDisposable(() => {
-            lock(m_asyncActions)
+            lock (m_asyncActions)
                 m_asyncActions.Remove(action);
         });
     }
@@ -130,7 +143,8 @@ sealed class ThreadQueue : IDispatchQueue, IDisposable
     public void Dispose()
     {
         m_isDisposed = true;
-        lock (m_asyncActions) {
+        lock (m_asyncActions)
+        {
             m_asyncActions.Clear();
             Monitor.Pulse(m_asyncActions);
         }
@@ -141,15 +155,17 @@ sealed class ThreadQueue : IDispatchQueue, IDisposable
 
     void ThreadProc()
     {
-        while(!m_isDisposed) {
+        while (!m_isDisposed)
+        {
             Action action = null;
-            lock (m_asyncActions) {
+            lock (m_asyncActions)
+            {
                 if (m_asyncActions.Count == 0)
                     Monitor.Wait(m_asyncActions);
 
                 if (m_isDisposed || m_asyncActions.Count == 0) // either disposed or spurious wakeup
                     continue;
-                
+
                 action = m_asyncActions[0];
                 m_asyncActions.RemoveAt(0);
             }
