@@ -45,100 +45,117 @@ namespace goroutines_filescanner
             public string Sha1 { get; set; }
         }
 
-        ObservableCollection<FileInfo> m_fileInfos = new ObservableCollection<FileInfo>();
+        readonly Channel<string> m_directoryChanged = new Channel<string>();
+        ObservableCollection<FileInfo> m_observableCollection = new ObservableCollection<FileInfo>();
 
         public MainPage()
         {
             this.InitializeComponent();
             textBox.Text = "";
-            listView.ItemsSource = m_fileInfos;
-        }
+            listView.ItemsSource = m_observableCollection;
 
-        private async void selectFolder_Click(object sender, RoutedEventArgs e)
+            StartListeningOnChannels();
+        }
+        
+        async void StartListeningOnChannels()
         {
-            if (await EnsureUnsnapped()) {
-                var folderPicker = new FolderPicker {
-                    SuggestedStartLocation = PickerLocationId.ComputerFolder
-                };
-                folderPicker.FileTypeFilter.Add(".NoSuchExtension");
-                var folder = await folderPicker.PickSingleFolderAsync();
-                if (folder != null) {
-                    // Application now has read/write access to all contents in the picked folder (including other sub-folder contents)
-                    StorageApplicationPermissions.FutureAccessList.AddOrReplace("PickedFolderToken", folder);
-                    textBox.Text = folder.Path;
+            while(m_directoryChanged.IsOpen) {
+                var directoryName = await m_directoryChanged.Receive();
+
+                var folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
+
+                var scanStarts = new Channel<string>();
+                var scanCompletes = new Channel<FileInfo>();
+                Go.Run(ScanDirectoryAsync, folder, true, scanStarts, scanCompletes);
+
+                m_observableCollection.Clear();
+                while (true) {
+                    var rv = await scanStarts.ReceiveEx();
+                    if (!rv.IsValid)
+                        return;  // channel closed
+
+                    var fi = new FileInfo { Name = rv.Value };
+
+                    var insertedIndex = m_observableCollection.Count;
+                    m_observableCollection.Add(fi);
+
+                    var rv2 = await scanCompletes.ReceiveEx();
+                    if (!rv2.IsValid)
+                        return; // channel closed
+                    m_observableCollection[insertedIndex] = rv2.Value;
                 }
             }
         }
-
-        internal async Task<bool> EnsureUnsnapped()
+        
+        private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
         {
-            // FilePicker APIs will not work if the application is in a snapped state.
-            // If an app wants to show a FilePicker while snapped, it must attempt to unsnap first
-            bool unsnapped = ((ApplicationView.Value != ApplicationViewState.Snapped) || ApplicationView.TryUnsnap());
-            if (!unsnapped) {
-                var dlg = new MessageDialog("Cannot unsnap to show a folder picker");
-                await dlg.ShowAsync();
-            }
-
-            return unsnapped;
-        }
-
-        private async void go_Click(object sender, RoutedEventArgs e)
-        {
-            var folder = await StorageFolder.GetFolderFromPathAsync(textBox.Text);
-            var results = new Channel<FileInfo>();
-
-            Go.Run(scanDir, folder, true, results);
-
-            await results.ForEach(fi => {
-                m_fileInfos.Add(fi);
-            });
-        }
-
-        private async Task scanDir(StorageFolder storageFolder, bool doSha1, Channel<FileInfo> results)
-        {
-            var sha1 = HashAlgorithmProvider.OpenAlgorithm(HashAlgorithmNames.Sha1);
-            var wg = new WaitGroup();
-
             foreach (var entry in await storageFolder.GetItemsAsync()) {
                 var folder = entry as StorageFolder; // folder
                 if(folder != null) {
+                    await starts.Send(folder.Name);
+
                     var innerResults = new Channel<FileInfo>();
-                    Go.Run(scanDir, folder, false, innerResults);
+                    Go.Run(ScanDirectoryAsync, folder, false, new Channel<string>(), innerResults);
+
                     var totalSize = await innerResults.Sum(f => f.Size);
-                    await results.Send(new FileInfo { Name = folder.Name, Size = totalSize });
+                    await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
                 }
 
                 var file = entry as StorageFile; // file
                 if (file != null) {
-                    var basicProps = await file.GetBasicPropertiesAsync();
-
-                    string sha1str = null;
-                    if (doSha1) {
-                        try {
-                            IBuffer buffer;
-                            using (var stream = await file.OpenAsync(FileAccessMode.Read)) {
-                                buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
-                                await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
-                            }
-
-                            var hash = sha1.HashData(buffer);
-                            var hashBytes = new byte[hash.Length];
-                            hash.CopyTo(hashBytes);
-                            sha1str = Convert.ToBase64String(hashBytes);
-                        }
-                        catch (UnauthorizedAccessException) { }
-                    }
-
-                    await results.Send(new FileInfo {
-                        Name = entry.Name,
-                        Path = entry.Path,
-                        Sha1 = sha1str,
-                        Size = basicProps.Size,
-                    });
+                    await starts.Send(file.Name);
+                    var fileInfo = await ScanFile(file, doSha1);
+                    await completes.Send(fileInfo);
                 }
             }
-            results.Close();
+            starts.Close();
+            completes.Close();
+        }
+
+        private async void selectFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var folderPicker = new FolderPicker {
+                SuggestedStartLocation = PickerLocationId.ComputerFolder
+            };
+            folderPicker.FileTypeFilter.Add(".NoSuchExtension");
+            var folder = await folderPicker.PickSingleFolderAsync();
+            if (folder != null) {
+                // Application now has read/write access to all contents in the picked folder (including other sub-folder contents)
+                StorageApplicationPermissions.FutureAccessList.AddOrReplace("PickedFolderToken", folder);
+                textBox.Text = folder.Path;
+            }
+            await m_directoryChanged.Send(textBox.Text);
+        }
+
+        private static readonly HashAlgorithmProvider Sha1 = HashAlgorithmProvider.OpenAlgorithm(HashAlgorithmNames.Sha1);
+
+        private async Task<FileInfo> ScanFile(StorageFile file, bool doSha1)
+        {
+            var basicProps = await file.GetBasicPropertiesAsync();
+
+            string sha1str = null;
+            if (doSha1) {
+                try {
+                    IBuffer buffer;
+                    using (var stream = await file.OpenAsync(FileAccessMode.Read)) {
+                        buffer = WindowsRuntimeBuffer.Create((int)basicProps.Size); // oh no we can't read large files
+                        await stream.ReadAsync(buffer, (uint)basicProps.Size, InputStreamOptions.None);
+                    }
+
+                    var hash = Sha1.HashData(buffer);
+                    var hashBytes = new byte[hash.Length];
+                    hash.CopyTo(hashBytes);
+                    sha1str = Convert.ToBase64String(hashBytes);
+                }
+                catch (UnauthorizedAccessException) { }
+            }
+
+            return new FileInfo {
+                Name = file.Name,
+                Path = file.Path,
+                Sha1 = sha1str,
+                Size = basicProps.Size,
+            };
         }
     }
 }

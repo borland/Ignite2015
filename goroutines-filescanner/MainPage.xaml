@@ -14,11 +14,7 @@
         <TextBox x:Name="textBox" HorizontalAlignment="Stretch" TextWrapping="NoWrap" Text="TextBox"
                  RelativePanel.AlignTopWithPanel="True"
                  RelativePanel.RightOf="selectFolder"
-                 RelativePanel.LeftOf="go"/>
-        <Button x:Name="go" Content="Go"
-                Click="go_Click"
-                RelativePanel.AlignRightWithPanel="True"
-                RelativePanel.AlignTopWithPanel="True"/>
+                 RelativePanel.AlignRightWithPanel="True"/>
         <ListView x:Name="listView"
                   RelativePanel.AlignBottomWithPanel="True"
                   RelativePanel.AlignLeftWithPanel="True"

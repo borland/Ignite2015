@@ -53,7 +53,7 @@ public static class Go
         public Action<T, bool> Action;
 
         Task Task;
-        Tuple<T, bool> Result = null;
+        ReceivedValue<T> ReceivedValue = default(ReceivedValue<T>);
 
         public Task SelectAsync(Func<bool> sync)
         {
@@ -61,13 +61,13 @@ public static class Go
                 return Task.FromResult(false);
 
             var r = new SelectCaseReceiver<T>(sync);
-            return Task = Channel.ReceiveInto(r).ContinueWith(t => Result = t.Result, TaskContinuationOptions.ExecuteSynchronously);
+            return Task = Channel.ReceiveInto(r).ContinueWith(t => ReceivedValue = t.Result, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         public void ApplyResultIfIsMyTask(Task task)
         {
             if (task == Task)
-                Action(Result.Item1, Result.Item2);
+                Action(ReceivedValue.Value, ReceivedValue.IsValid);
         }
     }
 
@@ -77,19 +77,19 @@ public static class Go
         public Action<T, bool> Action;
 
         Task Task;
-        Tuple<T, bool> Result = null;
+        ReceivedValue<T> ReceivedValue = default(ReceivedValue<T>);
 
         public Task SelectAsync(Func<bool> sync)
         {
             var r = new SelectCaseReceiver<T>(sync);
             return Task = Task.WhenAny(
-                Channels.Select(c => c.ReceiveInto(r).ContinueWith(t => Result = t.Result, TaskContinuationOptions.ExecuteSynchronously)));
+                Channels.Select(c => c.ReceiveInto(r).ContinueWith(t => ReceivedValue = t.Result, TaskContinuationOptions.ExecuteSynchronously)));
         }
 
         public void ApplyResultIfIsMyTask(Task task)
         {
             if (task == Task)
-                Action(Result.Item1, Result.Item2);
+                Action(ReceivedValue.Value, ReceivedValue.IsValid);
         }
     }
 
@@ -106,23 +106,42 @@ public static class Go
         => new SelectCase<T> { Channel = channel, Action = action };
 }
 
+public struct ReceivedValue<T>
+{
+    /// <summary>Constructs a new received value</summary>
+    /// <param name="value">The value</param>
+    /// <param name="isValid">Whether the value is valid (i.e it didn't come as the result of closing a channel)</param>
+    public ReceivedValue(T value, bool isValid = true)
+    {
+        IsValid = isValid;
+        Value = value;
+    }
+
+    /// <summary>Value that was received</summary>
+    public T Value { get; private set; }
+
+    /// <summary>True if the value is valid. 
+    /// You will receive an invalid value if you call Receive() on a channel and that channel gets closed while you are waiting</summary>
+    public bool IsValid { get; private set; }
+}
+
 public interface IReceiver<T>
 {
     bool TryReceive(T value, bool isValid);
-    Task<Tuple<T, bool>> ReceivedValue { get; }
+    Task<ReceivedValue<T>> ReceivedValue { get; }
 }
 
 public class Receiver<T> : IReceiver<T>
 {
-    protected readonly TaskCompletionSource<Tuple<T, bool>> m_tcs = new TaskCompletionSource<Tuple<T, bool>>();
+    protected readonly TaskCompletionSource<ReceivedValue<T>> m_tcs = new TaskCompletionSource<ReceivedValue<T>>();
 
     public virtual bool TryReceive(T value, bool isValid)
     {
-        m_tcs.SetResult(Tuple.Create(value, isValid));
+        m_tcs.SetResult(new ReceivedValue<T>(value, isValid));
         return true;
     }
 
-    public Task<Tuple<T, bool>> ReceivedValue => m_tcs.Task;
+    public Task<ReceivedValue<T>> ReceivedValue => m_tcs.Task;
 }
 
 public class SelectCaseReceiver<T> : Receiver<T>
@@ -135,7 +154,7 @@ public class SelectCaseReceiver<T> : Receiver<T>
     public override bool TryReceive(T value, bool isValid)
     {
         if (m_sync()) { // we won the race
-            m_tcs.SetResult(Tuple.Create(value, isValid));
+            m_tcs.SetResult(new ReceivedValue<T>(value, isValid));
             return true;
         }
         return false; // we lost the race
@@ -231,18 +250,18 @@ public class Channel<T>
 
     public Task<T> Receive() => ReceiveInto(new Receiver<T>())
         .ContinueWith(
-            t => t.Result.Item1,
+            t => t.Result.Value,
             TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously);
-    
-    public Task<Tuple<T, bool>> ReceiveEx() => ReceiveInto(new Receiver<T>());
 
-    public virtual Task<Tuple<T, bool>> ReceiveInto(IReceiver<T> receiver)
+    public Task<ReceivedValue<T>> ReceiveEx() => ReceiveInto(new Receiver<T>());
+
+    public virtual Task<ReceivedValue<T>> ReceiveInto(IReceiver<T> receiver)
     {
         // in go, a receive from a closed channel returns the zero value immediately
         // unless there are "unfinished" senders
         if (!m_isOpen && m_receivers.PromisedCount == 0) {
             receiver.TryReceive(default(T), false);
-            return Task.FromResult(Tuple.Create(default(T), false));
+            return Task.FromResult(default(ReceivedValue<T>));
         }
 
         m_receivers.Enqueue(receiver);
@@ -272,10 +291,10 @@ public static class ChannelExtensions
     public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
     {
         while(true) {
-            var t = await channel.ReceiveEx();
-            if (!t.Item2)
+            var r = await channel.ReceiveEx();
+            if (!r.IsValid)
                 return;
-            action(t.Item1);
+            action(r.Value);
         }
     }
 
@@ -346,14 +365,14 @@ public class BufferedChannel<T> : Channel<T>
         return base.Send(valueToSend);
     }
 
-    public override Task<Tuple<T, bool>> ReceiveInto(IReceiver<T> receiver)
+    public override Task<ReceivedValue<T>> ReceiveInto(IReceiver<T> receiver)
     {
         lock (m_buffer) {
             if(m_buffer.Count > 0) {
                 var value = m_buffer.Peek();
                 if (receiver.TryReceive(value, true)) // values dequeued from a buffer are always valid
                     m_buffer.Dequeue();
-                return Task.FromResult(Tuple.Create(value, true));
+                return Task.FromResult(new ReceivedValue<T>(value, true));
             }
         }
         // else the buffer is empty, act like a normal queue
