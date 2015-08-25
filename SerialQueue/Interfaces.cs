@@ -18,6 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 using System;
+using System.Threading.Tasks;
 
 namespace Dispatch
 {
@@ -43,7 +44,7 @@ namespace Dispatch
         /// Implementations reserve the right to run the action on a different thread (e.g WPF Dispatcher)</summary>
         /// <param name="action">The function to run.</param>
         void DispatchSync(Action action);
-
+        
         /// <summary>Checks whether the currently-executing function is
         /// on this queue, and throw an OperationInvalidException if it is not</summary>
         void VerifyQueue();
@@ -63,4 +64,40 @@ namespace Dispatch
         IDisposable Schedule(TimeSpan dueTime, Action action);
     }
 
+    /// <summary>Useful extension methods for queues</summary>
+    public static class IDispatchQueueExtensions
+    {
+        /// <summary>A wrapper over DispatchSync that calls a value-producing function and returns it's result</summary>
+        /// <typeparam name="T">Result type</typeparam>
+        /// <param name="queue">The queue to execute the function on</param>
+        /// <param name="func">The function to execute</param>
+        /// <returns>The return value of func</returns>
+        public static T DispatchSync<T>(this IDispatchQueue queue, Func<T> func)
+        {
+            T result = default(T);
+            queue.DispatchSync(() => { result = func(); });
+            return result;
+        }
+
+        /// <summary>A wrapper over DispatchAsync that calls a value-producing function on the queue and returns it's result via a Task</summary>
+        /// <remarks>Note: the task "completes" on the dispatch queue, so if you use ConfigureAwait(false) or
+        /// TaskContinuationOptions.ExecuteSychronously, you will still be running on the dispatch queue</remarks>
+        /// <typeparam name="T">Result type</typeparam>
+        /// <param name="queue">The queue to execute the function on</param>
+        /// <param name="func">The function to execute</param>
+        /// <returns>A task wrapping the return value (or exception) the func produced.</returns>
+        public static Task<T> DispatchAsync<T>(this IDispatchQueue queue, Func<T> func)
+        {
+            var tcs = new TaskCompletionSource<T>();
+            queue.DispatchAsync(() => {
+                try {
+                    tcs.SetResult(func());
+                }
+                catch (Exception e) {
+                    tcs.TrySetException(e);
+                }
+            });
+            return tcs.Task;
+        }
+    }
 }
