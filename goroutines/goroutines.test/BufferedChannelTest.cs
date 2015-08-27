@@ -46,5 +46,54 @@ namespace goroutines.test
             Assert.AreEqual(new ReceivedValue<int>(0, false), ci.ReceiveEx().Result);
         }
 
+        [TestMethod]
+        public async Task ReceiveBeforeSend()
+        {
+            var c = new BufferedChannel<int>(5);
+            var hits = new List<int>();
+            var t = Task.Run(async () => hits.Add(await c.Receive()));
+
+            await c.Send(1);
+            await t; // wait for receive to complete
+
+            CollectionAssert.AreEqual(new[] { 1 }, hits);
+        }
+        
+        [TestMethod]
+        public void ReceiveBeforeSendWithOverflow()
+        {
+            var c = new BufferedChannel<int>(2);
+
+            var hits = new List<int>();
+            var tasks = new List<Task>(5);
+            for (int i = 0; i < 5; i++) {
+                tasks.Add(Task.Run(() => hits.Add(c.Receive().Result)));
+            }
+
+            Assert.AreEqual(0, hits.Count);
+            c.Send(1).Wait();
+            // the first task to call Receive will complete first, but we can't control
+            // the task launch order so we don't know which task that might be
+            tasks.Remove(Task.WhenAny(tasks).Result);
+            CollectionAssert.AreEqual(new[] { 1 }, hits);
+
+            c.Send(2).Wait();
+            tasks.Remove(Task.WhenAny(tasks).Result);
+            CollectionAssert.AreEqual(new[] { 1, 2 }, hits);
+
+            c.Send(3).Wait();
+            tasks.Remove(Task.WhenAny(tasks).Result);
+            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, hits);
+
+            c.Send(4).Wait();
+            tasks.Remove(Task.WhenAny(tasks).Result);
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4 }, hits);
+
+            c.Send(5).Wait();
+            tasks.Remove(Task.WhenAny(tasks).Result);
+            CollectionAssert.AreEqual(new[] { 1, 2, 3, 4, 5 }, hits);
+
+            Assert.AreEqual(0, tasks.Count);
+        }
     }
 }

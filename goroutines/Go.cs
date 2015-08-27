@@ -200,6 +200,8 @@ public class AwaitableQueue<T>
             tcs.SetResult(value);
     }
 
+    /// <summary>Dequeues a value. If there is no value, returns a task
+    /// which will complete next time someone enqueues a new value</summary>
     public Task<T> Dequeue()
     {
         lock (m_queue) {
@@ -210,6 +212,23 @@ public class AwaitableQueue<T>
                 var tcs = new TaskCompletionSource<T>();
                 m_promises.Enqueue(tcs);
                 return tcs.Task;
+            }
+        }
+    }
+
+    /// <summary>Tries an immediate dequeue. Will not create any new Tasks</summary>
+    /// <param name="result">Value (if there was one)</param>
+    /// <returns>Whether or not there was a value in the queue</returns>
+    public bool TryDequeue(out T result)
+    {
+        lock (m_queue) {
+            if (m_queue.Count > 0) {
+                result = m_queue.Dequeue();
+                return true;
+            }
+            else {
+                result = default(T);
+                return false;
             }
         }
     }
@@ -233,7 +252,7 @@ public class Channel<T>
     volatile bool m_isOpen = true;
 
     // thread-safety provided by awaitableQueue
-    readonly AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
+    protected readonly AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
 
     public virtual async Task Send(T value)
     {
@@ -377,15 +396,22 @@ public class BufferedChannel<T> : Channel<T>
     public override Task Send(T value)
     {
         // first we need to check if there are any outstanding receivers
+        IReceiver<T> receiver;
+        if(m_receivers.TryDequeue(out receiver) && receiver.TryReceive(value, true)) { // there was one and we managed to send to it
+            return Task.FromResult(true); // so we're done
+        }
+
+        // else put the value in the queue
         T valueToSend;
         lock (m_buffer) {
             m_buffer.Enqueue(value);
             if (m_buffer.Count <= m_bufferSize)
-                return Task.FromResult(true);
+                return Task.FromResult(true); // if the queue is not full, we're done
 
+            // else we fallback to blocking send
             valueToSend = m_buffer.Dequeue();
         }
-
+        
         return base.Send(valueToSend);
     }
 
