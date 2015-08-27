@@ -15,45 +15,23 @@ using System.Text;
 public class TestChannel_Basic
 {
     [TestMethod]
-    public void SendAndReceive_Buffer_1()
-    {
-        var c = new BufferedChannel<int>(bufferSize: 1);
-        c.Send(1).Wait();
-        Assert.AreEqual(1, c.Receive().Result);
-    }
-
-    [TestMethod]
-    public void SendAndReceive_Buffer_5()
-    {
-        var c = new BufferedChannel<int>(bufferSize: 5);
-        c.Send(1).Wait();
-        c.Send(2).Wait();
-        c.Send(3).Wait();
-        c.Send(4).Wait();
-        c.Send(5).Wait();
-        Assert.AreEqual(1, c.Receive().Result);
-        Assert.AreEqual(2, c.Receive().Result);
-        Assert.AreEqual(3, c.Receive().Result);
-        Assert.AreEqual(4, c.Receive().Result);
-        Assert.AreEqual(5, c.Receive().Result);
-    }
-
-    [TestMethod]
     public void SendAndReceiveBlocking_1item()
     {
         var c = new Channel<int>();
 
         var hits = new List<int>();
-        Task.Run(() => {
-            var x = c.Receive().Result;
+        var mre = new ManualResetEvent(false);
+        Task.Run(async () => {
+            var x = await c.Receive();
             hits.Add(x);
+            mre.Set();
         });
 
         Assert.AreEqual(0, hits.Count);
         c.Send(1).Wait();
+        mre.WaitOne();
         CollectionAssert.AreEqual(new[] { 1 }, hits);
     }
-
 
     [TestMethod]
     public void SendAndReceiveBlocking_Sequence()
@@ -302,23 +280,11 @@ public class TestChannel_Closing
         var t1 = ci.Send(1); // cheating here by not awaiting
         var t2 = ci.Send(2); // cheating here by not awaiting
         ci.Close();
-        Assert.AreEqual(Tuple.Create(1, true), ci.ReceiveEx().Result);
-        Assert.AreEqual(Tuple.Create(2, true), ci.ReceiveEx().Result);
-        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
+        Assert.AreEqual(new ReceivedValue<int>(1, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(new ReceivedValue<int>(2, true), ci.ReceiveEx().Result);
+        Assert.AreEqual(new ReceivedValue<int>(0, false), ci.ReceiveEx().Result);
     }
-
-    [TestMethod]
-    public void ReceiveOnClosedChannelEmptiesBufferFirst()
-    {
-        var ci = new BufferedChannel<int>(2);
-        ci.Send(1).Wait();
-        ci.Send(2).Wait();
-        ci.Close();
-        Assert.AreEqual(Tuple.Create(1, true), ci.ReceiveEx().Result);
-        Assert.AreEqual(Tuple.Create(2, true), ci.ReceiveEx().Result);
-        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
-    }
-
+    
     [TestMethod]
     public void ClosingAReceivingChannelCompletesItImmediatelyWithDefault()
     {
@@ -329,7 +295,7 @@ public class TestChannel_Closing
             ci.Close();
         });
 
-        Assert.AreEqual(Tuple.Create(0, false), ci.ReceiveEx().Result);
+        Assert.AreEqual(new ReceivedValue<int>(0, false), ci.ReceiveEx().Result);
     }
 
     [TestMethod]

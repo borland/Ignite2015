@@ -1,0 +1,50 @@
+﻿<Page
+    x:Class="filescanner_rx.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:filescanner_rx"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <RelativePanel Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Button x:Name="selectFolder" Content="Select Folder"
+                Click="selectFolder_Click"
+                RelativePanel.AlignLeftWithPanel="True"
+                RelativePanel.AlignTopWithPanel="True"/>
+        <TextBox x:Name="textBox" HorizontalAlignment="Stretch" TextWrapping="NoWrap" Text="TextBox"
+                 RelativePanel.AlignTopWithPanel="True"
+                 RelativePanel.RightOf="selectFolder"
+                 RelativePanel.AlignRightWithPanel="True"/>
+        <ListView x:Name="listView"
+                  RelativePanel.AlignBottomWithPanel="True"
+                  RelativePanel.AlignLeftWithPanel="True"
+                  RelativePanel.AlignRightWithPanel="True"
+                  RelativePanel.Below="textBox">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Grid HorizontalAlignment="Stretch">
+
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock Grid.Column="0" Text="{Binding Size}" HorizontalAlignment="Left" />
+                        <TextBlock Grid.Column="1" Text="{Binding Name}" HorizontalAlignment="Stretch" />
+                        <TextBlock Grid.Column="2" Text="{Binding Sha1}" HorizontalAlignment="Right" />
+                    </Grid>
+
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+    </RelativePanel>
+
+</Page>

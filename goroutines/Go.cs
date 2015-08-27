@@ -24,7 +24,7 @@ public static class Go
     public static void Run<T1, T2, TResult>(Func<T1, T2, TResult> action, T1 arg1, T2 arg2) => Task.Run(() => action(arg1, arg2));
     public static void Run<T1, T2, T3, TResult>(Func<T1, T2, T3, TResult> action, T1 arg1, T2 arg2, T3 arg3) => Task.Run(() => action(arg1, arg2, arg3));
     public static void Run<T1, T2, T3, T4, TResult>(Func<T1, T2, T3, T4, TResult> action, T1 arg1, T2 arg2, T3 arg3, T4 arg4) => Task.Run(() => action(arg1, arg2, arg3, arg4));
-    
+
     // await on this function
     public static async Task Select(params ISelectCase[] cases)
     {
@@ -36,7 +36,7 @@ public static class Go
         // but do so in a thread-safe way
         var tasks = cases.Select(c => c.SelectAsync(sync)).ToArray();
         var completedTask = await Task.WhenAny(tasks).ConfigureAwait(false);
-        
+
         foreach (var c in cases)
             c.ApplyResultIfIsMyTask(completedTask);
     }
@@ -213,18 +213,17 @@ public class AwaitableQueue<T>
             }
         }
     }
-    
+
     /// <summary>Dumps the queue. Does not touch promised tasks</summary>
     /// <returns>The queue before we dumped it</returns>
     public T[] ClearQueue()
     {
         T[] queue;
-        lock (m_queue)
-        {
+        lock (m_queue) {
             queue = m_queue.ToArray();
             m_queue.Clear();
         }
-        
+
         return queue;
     }
 }
@@ -269,8 +268,9 @@ public class Channel<T>
         // we can always block forever, it's not like Select where we have to retry
         return receiver.ReceivedValue;
     }
-    
-    public bool Close() { // nuke all waiting tasks
+
+    public bool Close()
+    { // nuke all waiting tasks
         m_isOpen = false;
         var queued = m_receivers.ClearQueue();
         foreach (var x in queued)
@@ -290,12 +290,36 @@ public static class ChannelExtensions
     /// <param name="action"></param>
     public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
     {
-        while(true) {
+        while (true) {
             var r = await channel.ReceiveEx();
             if (!r.IsValid)
                 return;
             action(r.Value);
         }
+    }
+
+    public static Channel<TResult> Zip<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
+    {
+        var chan = new Channel<TResult>();
+        Task.Run(async () => {
+            try {
+                while (true) {
+                    var ra = await a.ReceiveEx();
+                    if (!ra.IsValid)
+                        break;
+
+                    var rb = await b.ReceiveEx();
+                    if (!rb.IsValid)
+                        break;
+
+                    await chan.Send(zipper(ra.Value, rb.Value));
+                }
+            }
+            finally {
+                chan.Close();
+            }
+        });
+        return chan;
     }
 
     public static async Task<int> Sum<T>(this Channel<T> channel, Func<T, int> selector)
@@ -354,7 +378,7 @@ public class BufferedChannel<T> : Channel<T>
     {
         // first we need to check if there are any outstanding receivers
         T valueToSend;
-        lock(m_buffer) {
+        lock (m_buffer) {
             m_buffer.Enqueue(value);
             if (m_buffer.Count <= m_bufferSize)
                 return Task.FromResult(true);
@@ -368,7 +392,7 @@ public class BufferedChannel<T> : Channel<T>
     public override Task<ReceivedValue<T>> ReceiveInto(IReceiver<T> receiver)
     {
         lock (m_buffer) {
-            if(m_buffer.Count > 0) {
+            if (m_buffer.Count > 0) {
                 var value = m_buffer.Peek();
                 if (receiver.TryReceive(value, true)) // values dequeued from a buffer are always valid
                     m_buffer.Dequeue();

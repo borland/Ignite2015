@@ -1,26 +1,12 @@
-﻿// This is free and unencumbered software released into the public domain.
-// Anyone is free to copy, modify, publish, use, compile, sell, or
-// distribute this software, either in source code form or as a compiled
-// binary, for any purpose, commercial or non-commercial, and by any
-// means.
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reactive.Subjects;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Threading.Tasks;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
-using Windows.Security.Cryptography.Core;
-using Windows.Storage;
-using Windows.Storage.AccessCache;
-using Windows.Storage.Pickers;
-using Windows.Storage.Streams;
-using Windows.UI.Popups;
-using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Windows.UI.Xaml.Controls.Primitives;
@@ -28,14 +14,19 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
+using System.Reactive;
+using System.Reactive.Linq;
+using Windows.Storage;
+using System.Threading.Tasks;
+using Windows.Storage.Pickers;
+using Windows.Storage.AccessCache;
+using Windows.Security.Cryptography.Core;
+using Windows.Storage.Streams;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
-namespace goroutines_filescanner
+namespace filescanner_rx
 {
-    /// <summary>
-    /// An empty page that can be used on its own or navigated to within a Frame.
-    /// </summary>
     public sealed partial class MainPage : Page
     {
         class FileInfo
@@ -46,7 +37,7 @@ namespace goroutines_filescanner
             public string Sha1 { get; set; }
         }
 
-        readonly Channel<string> m_directoryChanged = new Channel<string>();
+        readonly Subject<string> m_directoryChanged = new Subject<string>();
         ObservableCollection<FileInfo> m_observableCollection = new ObservableCollection<FileInfo>();
 
         public MainPage()
@@ -54,69 +45,90 @@ namespace goroutines_filescanner
             this.InitializeComponent();
             textBox.Text = "";
             listView.ItemsSource = m_observableCollection;
-            
+
             StartListeningOnChannels();
         }
 
-        const int BufferSize = 5;
-        
+        // Rx await with FirstAsync doesn't work properly
+        //
+        // FirstAsync waits and listens for the next value, then it stops listening. 
+        // If a value arrives while we're doing something else, we miss the value. We'd need to implement some kind of
+        // buffering mechanism to prevent this.
+        //
+        // If we did buffer, then how would you control the buffer size? do you block the call to OnNext? 
+        // If we did that then it would block the OS thread as OnNext is synchronous which would kill perf/scalability
+        // by the time we solve both those problems we've basically implemented channels.
+        //
+        // What could be quite interesting though is an Observable-to-channel adapter, as (OnError notwithstanding)
+        // channels are a superset observables, so this should work
         async void StartListeningOnChannels()
         {
-            while (m_directoryChanged.IsOpen) {
-                var directoryName = await m_directoryChanged.Receive();
+            while (true) { // how do we check for onCompleted
+                string directoryName;
+                try {
+                    directoryName = await m_directoryChanged.FirstAsync();
+                }
+                catch (InvalidOperationException) {
+                    break; // no more
+                }
                 var folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
 
-                var scanStarts = new BufferedChannel<string>(5);
-                var scanCompletes = new BufferedChannel<FileInfo>(5);
-                Go.Run(ScanDirectoryAsync, folder, true, scanStarts, scanCompletes);
+                var scanStarts = new Subject<string>();
+                var scanCompletes = new Subject<FileInfo>();
+                var _ = Task.Run(() => ScanDirectoryAsync(folder, true, scanStarts, scanCompletes));
 
                 m_observableCollection.Clear();
                 while (true) {
-                    var rv = await scanStarts.ReceiveEx();
-                    if (!rv.IsValid)
-                        break;  // channel closed
-
-                    var fi = new FileInfo { Name = rv.Value };
+                    FileInfo fi;
+                    try {
+                        fi = new FileInfo { Name = await scanStarts.FirstAsync() };
+                    }
+                    catch (InvalidOperationException) {
+                        break; // no more elements
+                    }
 
                     var insertedIndex = m_observableCollection.Count;
                     m_observableCollection.Add(fi);
 
-                    var rv2 = await scanCompletes.ReceiveEx();
-                    if (!rv2.IsValid)
-                        break; // channel closed
-                    m_observableCollection[insertedIndex] = rv2.Value;
+                    try {
+                        fi = await scanCompletes.FirstAsync();
+                    }
+                    catch (InvalidOperationException) {
+                        break; // no more elements
+                    }
+
+                    m_observableCollection[insertedIndex] = fi;
                 }
             }
         }
-        
-        private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
+
+        private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, IObserver<string> starts, IObserver<FileInfo> completes)
         {
             foreach (var entry in await storageFolder.GetItemsAsync()) {
                 var folder = entry as StorageFolder; // folder
-                if(folder != null) {
-                    await starts.Send(folder.Name);
+                if (folder != null) {
+                    starts.OnNext(folder.Name);
 
-                    // some small amount of buffering should improve perf as we don't have to task-switch so often
-                    var innerStarts = new BufferedChannel<string>(5);
-                    var innerCompletes = new BufferedChannel<FileInfo>(5);
-                    Go.Run(ScanDirectoryAsync, folder, false, innerStarts, innerCompletes);
+                    var innerStarts = new Subject<string>();
+                    var innerCompletes = new Subject<FileInfo>();
+                    var _ = Task.Run(() => ScanDirectoryAsync(folder, false, innerStarts, innerCompletes));
 
                     var totalSize = await innerStarts
-                        .Zip(innerCompletes, (s,f) => f.Size)
-                        .Sum(x => x).ConfigureAwait(false);
+                        .Zip(innerCompletes, (s, f) => (double)f.Size)
+                        .Sum(x => x).FirstAsync();
 
-                    await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
+                    completes.OnNext(new FileInfo { Name = folder.Name, Size = (ulong)totalSize });
                 }
 
                 var file = entry as StorageFile; // file
                 if (file != null) {
-                    await starts.Send(file.Name);
+                    starts.OnNext(file.Name);
                     var fileInfo = await ScanFile(file, doSha1).ConfigureAwait(false);
-                    await completes.Send(fileInfo);
+                    completes.OnNext(fileInfo);
                 }
             }
-            starts.Close();
-            completes.Close();
+            starts.OnCompleted();
+            completes.OnCompleted();
         }
 
         private async void selectFolder_Click(object sender, RoutedEventArgs e)
@@ -131,7 +143,7 @@ namespace goroutines_filescanner
                 StorageApplicationPermissions.FutureAccessList.AddOrReplace("PickedFolderToken", folder);
                 textBox.Text = folder.Path;
             }
-            await m_directoryChanged.Send(textBox.Text);
+            m_directoryChanged.OnNext(textBox.Text);
         }
 
         private static readonly HashAlgorithmProvider Sha1 = HashAlgorithmProvider.OpenAlgorithm(HashAlgorithmNames.Sha1);

@@ -53,6 +53,7 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="BufferedChannelTest.cs" />
     <Compile Include="ChannelTest.cs" />
     <Compile Include="AwaitableQueueTest.cs" />
   </ItemGroup>
