@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 
 class MainClass
 {
+    // the implementation of all the things is in Go.cs
     public static void Main(string[] args)
     {
         basic.Run().Wait();

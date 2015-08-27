@@ -1,13 +1,25 @@
-﻿// This is free and unencumbered software released into the public domain.
-// Anyone is free to copy, modify, publish, use, compile, sell, or
-// distribute this software, either in source code form or as a compiled
-// binary, for any purpose, commercial or non-commercial, and by any
-// means.
+﻿// Copyright(c) 2015 Orion Edwards
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+// 
+// The above copyright notice and this permission notice shall be included in
+// all copies or substantial portions of the Software.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+// THE SOFTWARE.
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -320,6 +332,42 @@ public static class ChannelExtensions
     public static Channel<TResult> Zip<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
     {
         var chan = new Channel<TResult>();
+
+        Action<Task<ReceivedValue<TB>>> bFunc = null;
+
+        var lastA = default(TA);
+
+        Action<Task<ReceivedValue<TA>>> aFunc = t => {
+            var rv = t.Result;
+            if (!rv.IsValid) {
+                chan.Close();
+                return;
+            }
+
+            lastA = rv.Value;
+            b.ReceiveEx().ContinueWith(bFunc, TaskContinuationOptions.ExecuteSynchronously);
+        };
+
+        bFunc = t => {
+            var rv = t.Result;
+            if (!rv.IsValid) {
+                chan.Close();
+                return;
+            }
+
+            var combined = zipper(lastA, rv.Value);
+            chan.Send(combined).ContinueWith(t2 => {
+                b.ReceiveEx().ContinueWith(bFunc, TaskContinuationOptions.ExecuteSynchronously);
+            }, TaskContinuationOptions.ExecuteSynchronously);
+        };
+
+        a.ReceiveEx().ContinueWith(aFunc, TaskContinuationOptions.ExecuteSynchronously);
+        return chan;
+    }
+
+    public static Channel<TResult> ZipX<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
+    {
+        var chan = new Channel<TResult>();
         Task.Run(async () => {
             try {
                 while (true) {
@@ -397,7 +445,7 @@ public class BufferedChannel<T> : Channel<T>
     {
         // first we need to check if there are any outstanding receivers
         IReceiver<T> receiver;
-        if(m_receivers.TryDequeue(out receiver) && receiver.TryReceive(value, true)) { // there was one and we managed to send to it
+        if (m_receivers.TryDequeue(out receiver) && receiver.TryReceive(value, true)) { // there was one and we managed to send to it
             return Task.FromResult(true); // so we're done
         }
 
@@ -411,7 +459,7 @@ public class BufferedChannel<T> : Channel<T>
             // else we fallback to blocking send
             valueToSend = m_buffer.Dequeue();
         }
-        
+
         return base.Send(valueToSend);
     }
 
