@@ -259,7 +259,7 @@ public class AwaitableQueue<T>
     }
 }
 
-public class Channel<T>
+public class Channel<T> : IDisposable
 {
     volatile bool m_isOpen = true;
 
@@ -311,6 +311,14 @@ public class Channel<T>
     }
 
     public bool IsOpen => m_isOpen;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if(disposing)
+            Close();
+    }
+
+    public void Dispose() => Dispose(true);
 }
 
 public static class ChannelExtensions

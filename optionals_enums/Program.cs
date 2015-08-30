@@ -15,12 +15,12 @@ namespace optionals_enums
     {
         public static void Main(string[] args)
         {
-            var file = "c:\\temp\\test1.txt";
-            ReadFile(file).Unwrap(
-                x => Console.WriteLine(x.Length));
+            var file = "c:\\temp\\test.txt";
+            var data = ReadFile(file);
+            Console.WriteLine($"Length is ${data.Length}");
         }
         
-        static Optional<string> ReadFile(string path)
+        static string ReadFile(string path)
         {
             if (!File.Exists(path))
                 return null;

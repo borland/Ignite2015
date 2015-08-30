@@ -66,8 +66,8 @@ namespace goroutines_filescanner
                 var directoryName = await m_directoryChanged.Receive();
                 var folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
 
-                var scanStarts = new BufferedChannel<string>(5);
-                var scanCompletes = new BufferedChannel<FileInfo>(5);
+                var scanStarts = new Channel<string>();
+                var scanCompletes = new Channel<FileInfo>();
                 Go.Run(ScanDirectoryAsync, folder, true, scanStarts, scanCompletes);
 
                 m_observableCollection.Clear();
@@ -91,32 +91,38 @@ namespace goroutines_filescanner
         
         private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
         {
-            foreach (var entry in await storageFolder.GetItemsAsync()) {
-                var folder = entry as StorageFolder; // folder
-                if(folder != null) {
-                    await starts.Send(folder.Name);
+            using (starts)
+            using (completes) {
+                foreach (var entry in await storageFolder.GetItemsAsync()) {
+                    var folder = entry as StorageFolder; // folder
+                    if (folder != null) {
+                        await starts.Send(folder.Name);
 
-                    // some small amount of buffering should improve perf as we don't have to task-switch so often
-                    var innerStarts = new BufferedChannel<string>(5);
-                    var innerCompletes = new BufferedChannel<FileInfo>(5);
-                    Go.Run(ScanDirectoryAsync, folder, false, innerStarts, innerCompletes);
+                        // some small amount of buffering should improve perf as we don't have to task-switch so often
+                        var innerStarts = new Channel<string>();
+                        var innerCompletes = new Channel<FileInfo>();
+                        Go.Run(ScanDirectoryAsync, folder, false, innerStarts, innerCompletes);
 
-                    var totalSize = await innerStarts
-                        .Zip(innerCompletes, (s,f) => f.Size)
-                        .Sum(x => x).ConfigureAwait(false);
+                        var totalSize = await innerStarts
+                            .Zip(innerCompletes, (s, f) => f.Size)
+                            .Sum(x => x).ConfigureAwait(false);
 
-                    await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
-                }
+                        await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
+                    }
 
-                var file = entry as StorageFile; // file
-                if (file != null) {
-                    await starts.Send(file.Name);
-                    var fileInfo = await ScanFile(file, doSha1).ConfigureAwait(false);
-                    await completes.Send(fileInfo);
+                    var file = entry as StorageFile; // file
+                    if (file != null) {
+                        var fi = new FileInfo{ Name = file.Name };
+                        await starts.Send(file.Name);
+                        try {
+                            fi = await ScanFile(file, doSha1:false).ConfigureAwait(false);
+                        } catch(Exception e) {
+                            Debug.WriteLine($"{e} scanning {file.Name}");
+                        }
+                        await completes.Send(fi); // if we fail, publish an empty entry to complete the sequence
+                    }
                 }
             }
-            starts.Close();
-            completes.Close();
         }
 
         private async void selectFolder_Click(object sender, RoutedEventArgs e)
@@ -138,6 +144,7 @@ namespace goroutines_filescanner
 
         private async Task<FileInfo> ScanFile(StorageFile file, bool doSha1)
         {
+            var fn = file.Name;
             var basicProps = await file.GetBasicPropertiesAsync();
 
             string sha1str = null;
