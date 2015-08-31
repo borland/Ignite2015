@@ -15,9 +15,9 @@ class basic
 {
     static async Task MultiplyAsync(int a, int b, Channel<int> result, Channel<string> messages)
     {
-        await result.Send(a * b);
-        await messages.Send("ok");
-        Console.WriteLine("mutliply done");
+        await result.Send(a * b).ConfigureAwait(false);
+        await messages.Send("ok").ConfigureAwait(false);
+        WriteLine("mutliply done");
     }
 
     public static async Task Run()
@@ -27,7 +27,10 @@ class basic
 
         Go.Run(MultiplyAsync, 10, 20, result, messages);
 
-        WriteLine($"result was {await result.Receive()}");
-        WriteLine($"message was {await messages.Receive()}");
+        WriteLine($"result was {await result.Receive().ConfigureAwait(false)}");
+        WriteLine($"message was {await messages.Receive().ConfigureAwait(false)}");
+
+        result.Receive().Wait();
+        messages.Receive().Wait();
     }
 }

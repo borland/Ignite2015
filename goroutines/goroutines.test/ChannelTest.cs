@@ -350,6 +350,30 @@ public class TestChannel_Closing
     }
 }
 
+[TestClass]
+public class TestChannel_Examples
+{
+    [TestMethod]
+    public async Task ChannelsPingPongBackAndForth()
+    {
+        var left = new Channel<int>();
+        var right = new Channel<int>();
+
+        var _ = Task.Run(async () => {
+            for (int i = 0; i < 5; i++) {
+                var x = await left.Receive().ConfigureAwait(false);
+                await right.Send(x);
+            }
+        });
+
+        for(int i = 0; i < 5; i++) {
+            await left.Send(i).ConfigureAwait(false);
+            var x = await right.Receive();
+            Assert.AreEqual(i, x);
+        }
+    }
+}
+
 public static class ExAssert
 {
     public static Exception Catch(Action throws)

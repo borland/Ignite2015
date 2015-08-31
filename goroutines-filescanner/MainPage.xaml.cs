@@ -82,6 +82,7 @@ namespace goroutines_filescanner
                     m_observableCollection.Add(fi);
 
                     var rv2 = await scanCompletes.ReceiveEx();
+
                     if (!rv2.IsValid)
                         break; // channel closed
                     m_observableCollection[insertedIndex] = rv2.Value;
@@ -106,7 +107,7 @@ namespace goroutines_filescanner
                         var totalSize = await innerStarts
                             .Zip(innerCompletes, (s, f) => f.Size)
                             .Sum(x => x).ConfigureAwait(false);
-
+                        
                         await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
                     }
 
@@ -115,7 +116,7 @@ namespace goroutines_filescanner
                         var fi = new FileInfo{ Name = file.Name };
                         await starts.Send(file.Name);
                         try {
-                            fi = await ScanFile(file, doSha1:false).ConfigureAwait(false);
+                            fi = await ScanFile(file, doSha1).ConfigureAwait(false);
                         } catch(Exception e) {
                             Debug.WriteLine($"{e} scanning {file.Name}");
                         }

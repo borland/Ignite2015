@@ -19,6 +19,7 @@
 // THE SOFTWARE.
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -259,22 +260,40 @@ public class AwaitableQueue<T>
     }
 }
 
+class S
+{
+    public static int s_token = 0; // statics in generic classes are per-type-instantiated
+}
+
 public class Channel<T> : IDisposable
 {
+    readonly int m_tkn;
+
+    public Channel()
+    {
+        m_tkn = Interlocked.Increment(ref S.s_token);
+    }
+
     volatile bool m_isOpen = true;
 
     // thread-safety provided by awaitableQueue
     protected readonly AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
 
+    int SToken = 0;
+    
     public virtual async Task Send(T value)
     {
         if (!m_isOpen) // in go, a send to a closed channel panics
             throw new InvalidOperationException("channel closed");
 
+        var tkn = Interlocked.Increment(ref SToken);
+
         while (true) {
             var receiver = await m_receivers.Dequeue().ConfigureAwait(false);
-            if (receiver.TryReceive(value, true))
-                break; // else we lost the race with another sender, wait for the next one
+            if (receiver.TryReceive(value, true)) {
+                return;
+            } 
+            // else we lost the race with another sender, wait for the next one
         }
     }
 
@@ -285,6 +304,8 @@ public class Channel<T> : IDisposable
 
     public Task<ReceivedValue<T>> ReceiveEx() => ReceiveInto(new Receiver<T>());
 
+    int RToken = 0;
+
     public virtual Task<ReceivedValue<T>> ReceiveInto(IReceiver<T> receiver)
     {
         // in go, a receive from a closed channel returns the zero value immediately
@@ -294,6 +315,8 @@ public class Channel<T> : IDisposable
             return Task.FromResult(default(ReceivedValue<T>));
         }
 
+        var tkn = Interlocked.Increment(ref RToken);
+
         m_receivers.Enqueue(receiver);
         // now we have to wait for someone to call TryReceive on the receiver and for it to succeed
         // we can always block forever, it's not like Select where we have to retry
@@ -301,7 +324,8 @@ public class Channel<T> : IDisposable
     }
 
     public bool Close()
-    { // nuke all waiting tasks
+    {
+        // nuke all waiting tasks
         m_isOpen = false;
         var queued = m_receivers.ClearQueue();
         foreach (var x in queued)
@@ -330,60 +354,24 @@ public static class ChannelExtensions
     public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
     {
         while (true) {
-            var r = await channel.ReceiveEx();
+            var r = await channel.ReceiveEx().ConfigureAwait(false);
             if (!r.IsValid)
                 return;
             action(r.Value);
         }
     }
-
+    
     public static Channel<TResult> Zip<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
-    {
-        var chan = new Channel<TResult>();
-
-        Action<Task<ReceivedValue<TB>>> bFunc = null;
-
-        var lastA = default(TA);
-
-        Action<Task<ReceivedValue<TA>>> aFunc = t => {
-            var rv = t.Result;
-            if (!rv.IsValid) {
-                chan.Close();
-                return;
-            }
-
-            lastA = rv.Value;
-            b.ReceiveEx().ContinueWith(bFunc, TaskContinuationOptions.ExecuteSynchronously);
-        };
-
-        bFunc = t => {
-            var rv = t.Result;
-            if (!rv.IsValid) {
-                chan.Close();
-                return;
-            }
-
-            var combined = zipper(lastA, rv.Value);
-            chan.Send(combined).ContinueWith(t2 => {
-                b.ReceiveEx().ContinueWith(bFunc, TaskContinuationOptions.ExecuteSynchronously);
-            }, TaskContinuationOptions.ExecuteSynchronously);
-        };
-
-        a.ReceiveEx().ContinueWith(aFunc, TaskContinuationOptions.ExecuteSynchronously);
-        return chan;
-    }
-
-    public static Channel<TResult> ZipX<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
     {
         var chan = new Channel<TResult>();
         Task.Run(async () => {
             try {
                 while (true) {
-                    var ra = await a.ReceiveEx();
+                    var ra = await a.ReceiveEx().ConfigureAwait(false);
                     if (!ra.IsValid)
                         break;
 
-                    var rb = await b.ReceiveEx();
+                    var rb = await b.ReceiveEx().ConfigureAwait(false);
                     if (!rb.IsValid)
                         break;
 
