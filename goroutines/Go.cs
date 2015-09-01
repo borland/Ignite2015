@@ -280,7 +280,7 @@ public class Channel<T> : IDisposable
     protected readonly AwaitableQueue<IReceiver<T>> m_receivers = new AwaitableQueue<IReceiver<T>>();
 
     int SToken = 0;
-    
+
     public virtual async Task Send(T value)
     {
         if (!m_isOpen) // in go, a send to a closed channel panics
@@ -292,7 +292,7 @@ public class Channel<T> : IDisposable
             var receiver = await m_receivers.Dequeue().ConfigureAwait(false);
             if (receiver.TryReceive(value, true)) {
                 return;
-            } 
+            }
             // else we lost the race with another sender, wait for the next one
         }
     }
@@ -338,7 +338,7 @@ public class Channel<T> : IDisposable
 
     protected virtual void Dispose(bool disposing)
     {
-        if(disposing)
+        if (disposing)
             Close();
     }
 
@@ -354,16 +354,16 @@ public static class ChannelExtensions
     public static async Task ForEach<T>(this Channel<T> channel, Action<T> action)
     {
         while (true) {
-            var r = await channel.ReceiveEx().ConfigureAwait(false);
+            var r = await channel.ReceiveEx(); // can't use ConfigureAwait here as otherwise we might call action() in the wrong thread
             if (!r.IsValid)
                 return;
             action(r.Value);
         }
     }
-    
+
     public static Channel<TResult> Zip<TA, TB, TResult>(this Channel<TA> a, Channel<TB> b, Func<TA, TB, TResult> zipper)
     {
-        var chan = new Channel<TResult>();
+        var outgoing = new Channel<TResult>();
         Task.Run(async () => {
             try {
                 while (true) {
@@ -375,14 +375,14 @@ public static class ChannelExtensions
                     if (!rb.IsValid)
                         break;
 
-                    await chan.Send(zipper(ra.Value, rb.Value));
+                    await outgoing.Send(zipper(ra.Value, rb.Value));
                 }
             }
             finally {
-                chan.Close();
+                outgoing.Close();
             }
         });
-        return chan;
+        return outgoing;
     }
 
     public static async Task<int> Sum<T>(this Channel<T> channel, Func<T, int> selector)
@@ -397,6 +397,34 @@ public static class ChannelExtensions
         ulong sum = 0;
         await ForEach(channel, x => sum += selector(x));
         return sum;
+    }
+
+    public static Channel<T> Where<T>(this Channel<T> channel, Func<T, bool> filter)
+    {
+        var outgoing = new Channel<T>();
+        var _ = ForEach(channel, async value => {
+            if (filter(value))
+                await outgoing.Send(value);
+        }).ContinueWith(t => outgoing.Close(), TaskContinuationOptions.ExecuteSynchronously);
+        return outgoing;
+    }
+
+    public static Channel<TResult> Select<T, TResult>(this Channel<T> channel, Func<T, TResult> selector)
+    {
+        var outgoing = new Channel<TResult>();
+        var _ = ForEach(channel, async value => {
+            await outgoing.Send(selector(value));
+        }).ContinueWith(t => outgoing.Close(), TaskContinuationOptions.ExecuteSynchronously);
+        return outgoing;
+    }
+
+    public static Channel<TResult> Select<T, TResult>(this Channel<T> channel, Func<T, Task<TResult>> selector)
+    {
+        var outgoing = new Channel<TResult>();
+        var _ = ForEach(channel, async value => {
+            await outgoing.Send(await selector(value));
+        }).ContinueWith(t => outgoing.Close(), TaskContinuationOptions.ExecuteSynchronously);
+        return outgoing;
     }
 }
 

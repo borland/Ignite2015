@@ -62,42 +62,39 @@ namespace goroutines_filescanner
             StartListeningOnChannels();
         }
 
-        async void StartListeningOnChannels()
+        void StartListeningOnChannels()
         {
-            while (m_directoryChanged.IsOpen) {
-                var directoryName = await m_directoryChanged.Receive();
-                StorageFolder folder;
-                try {
-                    folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
-                }
-                catch (Exception) {
-                    continue; // invalid folder
-                }
+            var _ = m_directoryChanged
+                .Select(openDirectory)
+                .Where(f => f.HasValue)
+                .Select(o => o.Value)
+                .ForEach(async storageFolder => {
+                    using (var scanStarts = new Channel<string>())
+                    using (var scanCompletes = new Channel<FileInfo>()) {
 
-                var scanStarts = new Channel<string>();
-                var scanCompletes = new Channel<FileInfo>();
-                Go.Run(ScanDirectoryAsync, folder, true, scanStarts, scanCompletes);
+                        Go.Run(ScanDirectoryAsync, storageFolder, true, scanStarts, scanCompletes);
 
-                m_observableCollection.Clear();
-                while (true) {
-                    var rv = await scanStarts.ReceiveEx();
-                    if (!rv.IsValid)
-                        break;  // channel closed
+                        m_observableCollection.Clear();
+                        while (true) {
+                            var rv = await scanStarts.ReceiveEx();
+                            if (!rv.IsValid)
+                                break;  // channel closed
 
-                    var fi = new FileInfo { Name = rv.Value };
+                            var fi = new FileInfo { Name = rv.Value };
 
-                    var insertedIndex = m_observableCollection.Count;
-                    m_observableCollection.Add(fi);
+                            var insertedIndex = m_observableCollection.Count;
+                            m_observableCollection.Add(fi);
 
-                    var rv2 = await scanCompletes.ReceiveEx();
+                            var rv2 = await scanCompletes.ReceiveEx();
 
-                    if (!rv2.IsValid)
-                        break; // channel closed
-                    fi.CopyFrom(rv2.Value);
+                            if (!rv2.IsValid)
+                                break; // channel closed
+                            fi.CopyFrom(rv2.Value);
 
-                    await DrawTreeMap();
-                }
-            }
+                            await DrawTreeMap();
+                        }
+                    }
+                });
         }
 
         private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
@@ -133,6 +130,16 @@ namespace goroutines_filescanner
                         await completes.Send(fi); // if we fail, publish an empty entry to complete the sequence
                     }
                 }
+            }
+        }
+
+        private static async Task<Optional<StorageFolder>> openDirectory(string directoryName)
+        {
+            try {
+                return Optional.Create(await StorageFolder.GetFolderFromPathAsync(directoryName));
+            }
+            catch (Exception) {
+                return null; // invalid folder
             }
         }
 

@@ -96,6 +96,9 @@
     <Compile Include="..\goroutines\Go.cs">
       <Link>Go.cs</Link>
     </Compile>
+    <Compile Include="..\optionals_enums\Optional.cs">
+      <Link>Optional.cs</Link>
+    </Compile>
     <Compile Include="App.xaml.cs">
       <DependentUpon>App.xaml</DependentUpon>
     </Compile>
