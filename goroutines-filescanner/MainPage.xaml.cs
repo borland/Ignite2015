@@ -74,64 +74,63 @@ namespace goroutines_filescanner
                     continue; // invalid folder
                 }
 
-                using (var scanStarts = new Channel<string>())
-                using (var scanCompletes = new Channel<FileInfo>()) {
+                var addToList = new Channel<string>();
+                var dataLoaded = new Channel<FileInfo>();
+                Go.Run(ScanDirectoryAsync, storageFolder, true, addToList, dataLoaded);
 
-                    Go.Run(ScanDirectoryAsync, storageFolder, true, scanStarts, scanCompletes);
+                m_observableCollection.Clear();
+                while (true) {
+                    var rv = await addToList.ReceiveEx();
+                    if (!rv.IsValid)
+                        break;  // channel closed
 
-                    m_observableCollection.Clear();
-                    while (true) {
-                        var rv = await scanStarts.ReceiveEx();
-                        if (!rv.IsValid)
-                            break;  // channel closed
+                    var fi = new FileInfo { Name = rv.Value };
 
-                        var fi = new FileInfo { Name = rv.Value };
+                    var insertedIndex = m_observableCollection.Count;
+                    m_observableCollection.Add(fi);
 
-                        var insertedIndex = m_observableCollection.Count;
-                        m_observableCollection.Add(fi);
+                    var rv2 = await dataLoaded.ReceiveEx();
+                    if (!rv2.IsValid)
+                        break; // channel closed
+                    fi.CopyFrom(rv2.Value);
 
-                        var rv2 = await scanCompletes.ReceiveEx();
-                        if (!rv2.IsValid)
-                            break; // channel closed
-                        fi.CopyFrom(rv2.Value);
-
-                        await DrawTreeMap();
-                    }
+                    await DrawTreeMap();
                 }
             }
         }
 
-        private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
+        private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> addToList, Channel<FileInfo> dataLoaded)
         {
-            using (starts)
-            using (completes) {
+            using (addToList)
+            using (dataLoaded) {
                 foreach (var entry in await storageFolder.GetItemsAsync()) {
                     var folder = entry as StorageFolder; // folder
                     if (folder != null) {
-                        await starts.Send(folder.Name);
+                        await addToList.Send(folder.Name);
 
-                        var innerStarts = new Channel<string>();
-                        var innerCompletes = new Channel<FileInfo>();
-                        Go.Run(ScanDirectoryAsync, folder, false, innerStarts, innerCompletes);
+                        var innerAddToList = new Channel<string>();
+                        var innerDataLoaded = new Channel<FileInfo>();
+                        Go.Run(ScanDirectoryAsync, folder, false, innerAddToList, innerDataLoaded);
 
-                        var totalSize = await innerStarts
-                            .Zip(innerCompletes, (s, f) => f.Size)
-                            .Sum(x => x).ConfigureAwait(false);
+                        var totalSize = await innerAddToList
+                            .Zip(innerDataLoaded, (s, f) => f.Size)
+                            .Sum(x => x)
+                            .ConfigureAwait(false);
 
-                        await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize, IsLoaded = true });
+                        await dataLoaded.Send(new FileInfo { Name = folder.Name, Size = totalSize, IsLoaded = true });
                     }
 
                     var file = entry as StorageFile; // file
                     if (file != null) {
                         var fi = new FileInfo { Name = file.Name };
-                        await starts.Send(file.Name);
+                        await addToList.Send(file.Name);
                         try {
                             fi = await ScanFile(file, doSha1).ConfigureAwait(false);
                         }
                         catch (Exception e) {
                             Debug.WriteLine($"{e} scanning {file.Name}");
                         }
-                        await completes.Send(fi); // if we fail, publish an empty entry to complete the sequence
+                        await dataLoaded.Send(fi); // if we fail, publish an empty entry to complete the sequence
                     }
                 }
             }
