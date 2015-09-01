@@ -19,39 +19,47 @@
                  RelativePanel.AlignTopWithPanel="True"
                  RelativePanel.RightOf="selectFolder"
                  RelativePanel.AlignRightWithPanel="True"/>
-        <ListView x:Name="listView" Background="White" Margin="0,5,0,0"
-                  RelativePanel.AlignBottomWithPanel="True"
-                  RelativePanel.AlignLeftWithPanel="True"
-                  RelativePanel.AlignRightWithPanel="True"
-                  RelativePanel.Below="textBox">
-            <ListView.ItemContainerStyle>
-                <Style TargetType="ListViewItem">
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                </Style>
-            </ListView.ItemContainerStyle>
-            <ListView.ItemTemplate>
-                <DataTemplate>
-                    <Grid HorizontalAlignment="Stretch">
+        <Grid Background="White" Margin="0,5,0,0" 
+              RelativePanel.AlignBottomWithPanel="True"
+              RelativePanel.AlignLeftWithPanel="True"
+              RelativePanel.AlignRightWithPanel="True"
+              RelativePanel.Below="textBox">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="1*" />
+                <ColumnDefinition Width="1*" />
+            </Grid.ColumnDefinitions>
 
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="120" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
+            <ListView x:Name="listView" Grid.Column="0">
+                <ListView.ItemContainerStyle>
+                    <Style TargetType="ListViewItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    </Style>
+                </ListView.ItemContainerStyle>
+                <ListView.ItemTemplate>
+                    <DataTemplate>
+                        <Grid HorizontalAlignment="Stretch">
 
-                        <Grid Grid.Column="0">
-                            <TextBlock Text="{Binding Size}" HorizontalAlignment="Left" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=True}" />
-                            <ProgressRing IsActive="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=False}" />
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <Grid Grid.Column="0">
+                                <TextBlock Text="{Binding Size}" HorizontalAlignment="Left" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=True}" />
+                                <ProgressRing IsActive="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=False}" />
+                            </Grid>
+
+                            <TextBlock Grid.Column="1" Text="{Binding Name}" HorizontalAlignment="Stretch" />
+                            <TextBlock Grid.Column="2" Text="{Binding Sha1}" HorizontalAlignment="Right" />
                         </Grid>
 
-                        <TextBlock Grid.Column="1" Text="{Binding Name}" HorizontalAlignment="Stretch" />
-                        <TextBlock Grid.Column="2" Text="{Binding Sha1}" HorizontalAlignment="Right" />
-                    </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <Canvas x:Name="canvas" Background="LightGray" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
 
-                </DataTemplate>
-            </ListView.ItemTemplate>
-        </ListView>
-
+        </Grid>
     </RelativePanel>
 
 </Page>

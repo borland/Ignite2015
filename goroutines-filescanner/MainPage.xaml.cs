@@ -31,6 +31,7 @@ using Windows.UI.Xaml.Data;
 using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
+using Windows.UI.Xaml.Shapes;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x409
 
@@ -52,13 +53,17 @@ namespace goroutines_filescanner
             textBox.Text = "";
             listView.ItemsSource = m_observableCollection;
 
+            canvas.SizeChanged += (s, e) => {
+                DrawTreeMap();
+            };
+
             var titleBar = ApplicationView.GetForCurrentView().TitleBar;
             titleBar.BackgroundColor = titleBar.ButtonBackgroundColor = titleBar.InactiveBackgroundColor = titleBar.ButtonInactiveBackgroundColor = BackgroundColor;
             relativePanel.Background = new SolidColorBrush(BackgroundColor);
 
             StartListeningOnChannels();
         }
-        
+
         async void StartListeningOnChannels()
         {
             while (m_directoryChanged.IsOpen) {
@@ -91,7 +96,53 @@ namespace goroutines_filescanner
                     if (!rv2.IsValid)
                         break; // channel closed
                     fi.CopyFrom(rv2.Value);
+
+                    await DrawTreeMap();
                 }
+            }
+        }
+
+        private async Task DrawTreeMap()
+        {
+            double Width = canvas.ActualWidth;
+            double Height = canvas.ActualHeight;
+            const double MinSliceRatio = 0.35;
+
+            var collectionCopy = m_observableCollection.ToArray();
+
+            var rectangles = await Task.Run(() => {
+                var elements = collectionCopy
+                                .Where(x => x.Size > 0) // treemap goes into infinite recursion for 0-sized items
+                                 .Select(x => new TreeMap.Element<string> { Object = x.Name, Value = x.Size })
+                                 .OrderByDescending(x => x.Value)
+                                 .ToList();
+
+                var slice = TreeMap.GetSlice(elements, 1, MinSliceRatio);
+                if (slice == null)
+                    return Enumerable.Empty<TreeMap.SliceRectangle<string>>();
+
+                return TreeMap.GetRectangles(slice, Width, Height).ToList();
+            });
+
+            var white = new SolidColorBrush(Colors.White);
+            var grad = new LinearGradientBrush(new GradientStopCollection {
+                new GradientStop { Color = Colors.LightBlue, Offset = 0 },
+                new GradientStop { Color = Colors.DarkBlue, Offset = 1 },
+            }, 47);
+            canvas.Children.Clear();
+
+            foreach (var r in rectangles) {
+                var rect = new Rectangle { Width = r.Width, Height = r.Height };
+                Canvas.SetLeft(rect, r.X);
+                Canvas.SetTop(rect, r.Y);
+                rect.Fill = grad;
+
+                var text = new TextBlock { Text = r.Slice.Elements.First().Object, Foreground = white };
+                Canvas.SetLeft(text, r.X);
+                Canvas.SetTop(text, r.Y);
+
+                canvas.Children.Add(rect);
+                canvas.Children.Add(text);
             }
         }
 
