@@ -7,9 +7,11 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
 using Windows.Foundation;
@@ -19,6 +21,7 @@ using Windows.Storage;
 using Windows.Storage.AccessCache;
 using Windows.Storage.Pickers;
 using Windows.Storage.Streams;
+using Windows.UI;
 using Windows.UI.Popups;
 using Windows.UI.ViewManagement;
 using Windows.UI.Xaml;
@@ -38,33 +41,35 @@ namespace goroutines_filescanner
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        class FileInfo
-        {
-            public string Name { get; set; }
-            public string Path { get; set; }
-            public UInt64 Size { get; set; }
-            public string Sha1 { get; set; }
-        }
-
         readonly Channel<string> m_directoryChanged = new Channel<string>();
         ObservableCollection<FileInfo> m_observableCollection = new ObservableCollection<FileInfo>();
+
+        public static Color BackgroundColor = Color.FromArgb(255, 45, 187, 40);
 
         public MainPage()
         {
             this.InitializeComponent();
             textBox.Text = "";
             listView.ItemsSource = m_observableCollection;
-            
+
+            var titleBar = ApplicationView.GetForCurrentView().TitleBar;
+            titleBar.BackgroundColor = titleBar.ButtonBackgroundColor = titleBar.InactiveBackgroundColor = titleBar.ButtonInactiveBackgroundColor = BackgroundColor;
+            relativePanel.Background = new SolidColorBrush(BackgroundColor);
+
             StartListeningOnChannels();
         }
-
-        const int BufferSize = 5;
         
         async void StartListeningOnChannels()
         {
             while (m_directoryChanged.IsOpen) {
                 var directoryName = await m_directoryChanged.Receive();
-                var folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
+                StorageFolder folder;
+                try {
+                    folder = await StorageFolder.GetFolderFromPathAsync(directoryName);
+                }
+                catch (Exception) {
+                    continue; // invalid folder
+                }
 
                 var scanStarts = new Channel<string>();
                 var scanCompletes = new Channel<FileInfo>();
@@ -85,11 +90,11 @@ namespace goroutines_filescanner
 
                     if (!rv2.IsValid)
                         break; // channel closed
-                    m_observableCollection[insertedIndex] = rv2.Value;
+                    fi.CopyFrom(rv2.Value);
                 }
             }
         }
-        
+
         private async Task ScanDirectoryAsync(StorageFolder storageFolder, bool doSha1, Channel<string> starts, Channel<FileInfo> completes)
         {
             using (starts)
@@ -99,7 +104,6 @@ namespace goroutines_filescanner
                     if (folder != null) {
                         await starts.Send(folder.Name);
 
-                        // some small amount of buffering should improve perf as we don't have to task-switch so often
                         var innerStarts = new Channel<string>();
                         var innerCompletes = new Channel<FileInfo>();
                         Go.Run(ScanDirectoryAsync, folder, false, innerStarts, innerCompletes);
@@ -107,17 +111,18 @@ namespace goroutines_filescanner
                         var totalSize = await innerStarts
                             .Zip(innerCompletes, (s, f) => f.Size)
                             .Sum(x => x).ConfigureAwait(false);
-                        
-                        await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize });
+
+                        await completes.Send(new FileInfo { Name = folder.Name, Size = totalSize, IsLoaded = true });
                     }
 
                     var file = entry as StorageFile; // file
                     if (file != null) {
-                        var fi = new FileInfo{ Name = file.Name };
+                        var fi = new FileInfo { Name = file.Name };
                         await starts.Send(file.Name);
                         try {
                             fi = await ScanFile(file, doSha1).ConfigureAwait(false);
-                        } catch(Exception e) {
+                        }
+                        catch (Exception e) {
                             Debug.WriteLine($"{e} scanning {file.Name}");
                         }
                         await completes.Send(fi); // if we fail, publish an empty entry to complete the sequence
@@ -138,7 +143,6 @@ namespace goroutines_filescanner
                 StorageApplicationPermissions.FutureAccessList.AddOrReplace("PickedFolderToken", folder);
                 textBox.Text = folder.Path;
             }
-            await m_directoryChanged.Send(textBox.Text);
         }
 
         private static readonly HashAlgorithmProvider Sha1 = HashAlgorithmProvider.OpenAlgorithm(HashAlgorithmNames.Sha1);
@@ -170,7 +174,83 @@ namespace goroutines_filescanner
                 Path = file.Path,
                 Sha1 = sha1str,
                 Size = basicProps.Size,
+                IsLoaded = true
             };
         }
+
+        class FileInfo : INotifyPropertyChanged
+        {
+            string m_name, m_path, m_sha1;
+            bool m_isLoaded;
+            ulong m_size;
+
+            public event PropertyChangedEventHandler PropertyChanged;
+
+            public void CopyFrom(FileInfo other)
+            {
+                Name = other.Name;
+                Path = other.Path;
+                Size = other.Size;
+                Sha1 = other.Sha1;
+                IsLoaded = other.IsLoaded;
+            }
+
+            public string Name
+            {
+                get { return m_name; }
+                set { SetIfDifferent(ref m_name, value); }
+            }
+
+            public string Path
+            {
+                get { return m_path; }
+                set { SetIfDifferent(ref m_path, value); }
+            }
+
+            public ulong Size
+            {
+                get { return m_size; }
+                set { SetIfDifferent(ref m_size, value); }
+            }
+
+            public string Sha1
+            {
+                get { return m_sha1; }
+                set { SetIfDifferent(ref m_sha1, value); }
+            }
+
+            public bool IsLoaded
+            {
+                get { return m_isLoaded; }
+                set { SetIfDifferent(ref m_isLoaded, value); }
+            }
+
+            void SetIfDifferent<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+            {
+                if (Object.Equals(field, value))
+                    return;
+
+                field = value;
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
+        private void textBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            var _ = m_directoryChanged.Send(textBox.Text);
+        }
+    }
+
+    public class VisibleIf : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, string language)
+        {
+            if (Object.Equals(parameter, value.ToString())) // xaml ConverterParameters come in as strings
+                return Visibility.Visible;
+            return Visibility.Collapsed;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, string language)
+        { throw new NotImplementedException(); }
     }
 }

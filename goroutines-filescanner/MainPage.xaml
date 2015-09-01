@@ -5,17 +5,21 @@
     xmlns:local="using:goroutines_filescanner"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:my="using:goroutines_filescanner"
     mc:Ignorable="d">
-    <RelativePanel Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Button x:Name="selectFolder" Content="Select Folder"
+    <Page.Resources>
+        <my:VisibleIf x:Key="VisibleIf" />
+    </Page.Resources>
+    <RelativePanel x:Name="relativePanel">
+        <Button x:Name="selectFolder" Content="Select Folder" Foreground="White" BorderThickness="0" Background="Transparent"
                 Click="selectFolder_Click"
-                RelativePanel.AlignLeftWithPanel="True"
-                RelativePanel.AlignTopWithPanel="True"/>
-        <TextBox x:Name="textBox" HorizontalAlignment="Stretch" TextWrapping="NoWrap" Text="TextBox"
+                RelativePanel.AlignLeftWithPanel="True" RelativePanel.AlignTopWithPanel="True"
+                Height="32"/>
+        <TextBox x:Name="textBox" HorizontalAlignment="Stretch" TextWrapping="NoWrap" Text="TextBox" TextChanged="textBox_TextChanged"
                  RelativePanel.AlignTopWithPanel="True"
                  RelativePanel.RightOf="selectFolder"
                  RelativePanel.AlignRightWithPanel="True"/>
-        <ListView x:Name="listView"
+        <ListView x:Name="listView" Background="White" Margin="0,5,0,0"
                   RelativePanel.AlignBottomWithPanel="True"
                   RelativePanel.AlignLeftWithPanel="True"
                   RelativePanel.AlignRightWithPanel="True"
@@ -35,7 +39,11 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
-                        <TextBlock Grid.Column="0" Text="{Binding Size}" HorizontalAlignment="Left" />
+                        <Grid Grid.Column="0">
+                            <TextBlock Text="{Binding Size}" HorizontalAlignment="Left" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=True}" />
+                            <ProgressRing IsActive="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="{Binding IsLoaded, Converter={StaticResource VisibleIf}, ConverterParameter=False}" />
+                        </Grid>
+
                         <TextBlock Grid.Column="1" Text="{Binding Name}" HorizontalAlignment="Stretch" />
                         <TextBlock Grid.Column="2" Text="{Binding Sha1}" HorizontalAlignment="Right" />
                     </Grid>
