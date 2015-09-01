@@ -9,7 +9,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
-namespace optionals_enums
+namespace optionals
 {
     class MainClass
     {
