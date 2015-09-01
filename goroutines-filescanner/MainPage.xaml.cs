@@ -53,9 +53,7 @@ namespace goroutines_filescanner
             textBox.Text = "";
             listView.ItemsSource = m_observableCollection;
 
-            canvas.SizeChanged += (s, e) => {
-                DrawTreeMap();
-            };
+            canvas.SizeChanged += (s, e) => { var _ = DrawTreeMap(); };
 
             var titleBar = ApplicationView.GetForCurrentView().TitleBar;
             titleBar.BackgroundColor = titleBar.ButtonBackgroundColor = titleBar.InactiveBackgroundColor = titleBar.ButtonInactiveBackgroundColor = BackgroundColor;
@@ -99,50 +97,6 @@ namespace goroutines_filescanner
 
                     await DrawTreeMap();
                 }
-            }
-        }
-
-        private async Task DrawTreeMap()
-        {
-            double Width = canvas.ActualWidth;
-            double Height = canvas.ActualHeight;
-            const double MinSliceRatio = 0.35;
-
-            var collectionCopy = m_observableCollection.ToArray();
-
-            var rectangles = await Task.Run(() => {
-                var elements = collectionCopy
-                                .Where(x => x.Size > 0) // treemap goes into infinite recursion for 0-sized items
-                                 .Select(x => new TreeMap.Element<string> { Object = x.Name, Value = x.Size })
-                                 .OrderByDescending(x => x.Value)
-                                 .ToList();
-
-                var slice = TreeMap.GetSlice(elements, 1, MinSliceRatio);
-                if (slice == null)
-                    return Enumerable.Empty<TreeMap.SliceRectangle<string>>();
-
-                return TreeMap.GetRectangles(slice, Width, Height).ToList();
-            });
-
-            var white = new SolidColorBrush(Colors.White);
-            var grad = new LinearGradientBrush(new GradientStopCollection {
-                new GradientStop { Color = Colors.LightBlue, Offset = 0 },
-                new GradientStop { Color = Colors.DarkBlue, Offset = 1 },
-            }, 47);
-            canvas.Children.Clear();
-
-            foreach (var r in rectangles) {
-                var rect = new Rectangle { Width = r.Width, Height = r.Height };
-                Canvas.SetLeft(rect, r.X);
-                Canvas.SetTop(rect, r.Y);
-                rect.Fill = grad;
-
-                var text = new TextBlock { Text = r.Slice.Elements.First().Object, Foreground = white };
-                Canvas.SetLeft(text, r.X);
-                Canvas.SetTop(text, r.Y);
-
-                canvas.Children.Add(rect);
-                canvas.Children.Add(text);
             }
         }
 
@@ -227,6 +181,50 @@ namespace goroutines_filescanner
                 Size = basicProps.Size,
                 IsLoaded = true
             };
+        }
+
+        private async Task DrawTreeMap()
+        {
+            double Width = canvas.ActualWidth;
+            double Height = canvas.ActualHeight;
+            const double MinSliceRatio = 0.35;
+
+            var collectionCopy = m_observableCollection.ToArray();
+
+            var rectangles = await Task.Run(() => {
+                var elements = collectionCopy
+                                .Where(x => x.Size > 0) // treemap goes into infinite recursion for 0-sized items
+                                 .Select(x => new TreeMap.Element<string> { Object = x.Name, Value = x.Size })
+                                 .OrderByDescending(x => x.Value)
+                                 .ToList();
+
+                var slice = TreeMap.GetSlice(elements, 1, MinSliceRatio);
+                if (slice == null)
+                    return Enumerable.Empty<TreeMap.SliceRectangle<string>>();
+
+                return TreeMap.GetRectangles(slice, Width, Height).ToList();
+            });
+
+            var white = new SolidColorBrush(Colors.White);
+            var grad = new LinearGradientBrush(new GradientStopCollection {
+                new GradientStop { Color = Colors.LightBlue, Offset = 0 },
+                new GradientStop { Color = Colors.DarkBlue, Offset = 1 },
+            }, 47);
+            canvas.Children.Clear();
+
+            foreach (var r in rectangles) {
+                var rect = new Rectangle { Width = r.Width, Height = r.Height };
+                Canvas.SetLeft(rect, r.X);
+                Canvas.SetTop(rect, r.Y);
+                rect.Fill = grad;
+
+                var text = new TextBlock { Text = r.Slice.Elements.First().Object, Foreground = white };
+                Canvas.SetLeft(text, r.X);
+                Canvas.SetTop(text, r.Y);
+
+                canvas.Children.Add(rect);
+                canvas.Children.Add(text);
+            }
         }
 
         class FileInfo : INotifyPropertyChanged
