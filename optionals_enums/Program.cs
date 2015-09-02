@@ -15,12 +15,13 @@ namespace optionals
     {
         public static void Main(string[] args)
         {
-            var file = "c:\\temp\\test.txt";
+            var file = "c:\\temp\\test1.txt";
             var data = ReadFile(file);
-            Console.WriteLine($"Length is ${data.Length}");
+            data.Unwrap(
+                c => Console.WriteLine($"Length is ${c.Length}"));
         }
         
-        static string ReadFile(string path)
+        static Optional<string> ReadFile(string path)
         {
             if (!File.Exists(path))
                 return null;

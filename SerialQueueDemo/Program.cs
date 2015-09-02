@@ -18,8 +18,8 @@ class Program
 {
     static void Main(string[] args)
     {
-        const int NumQueues = 200;
-        Func<IDispatchQueue> CreateQ = () => new ThreadQueue();
+        const int NumQueues = 10000;
+        Func<IDispatchQueue> CreateQ = () => new SerialQueue();
 
         Console.WriteLine($"About to create {NumQueues} queues"); Console.ReadLine();
         var vmem = Process.GetCurrentProcess().VirtualMemorySize64;
