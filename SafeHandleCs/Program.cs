@@ -15,7 +15,7 @@ using static NativeMethods;
 static class NativeMethods
 {
     [DllImport("SafeHandleCpp.dll")]
-    public static extern IntPtr OpenResource(int id, [MarshalAs(UnmanagedType.LPStr)]string name);
+    public static extern MyHandle OpenResource(int id, [MarshalAs(UnmanagedType.LPStr)]string name);
 
     [DllImport("SafeHandleCpp.dll")]
     public static extern void CloseResource(IntPtr resource);
@@ -39,7 +39,7 @@ class Resource : IDisposable
 
     public Resource(int id, string name)
     {
-        ptr = new MyHandle(OpenResource(id, name));
+        ptr = OpenResource(id, name);
     }
 
     public void Use() => UseResource(ptr);
@@ -49,11 +49,10 @@ class Resource : IDisposable
 
 class MyHandle : SafeHandleZeroOrMinusOneIsInvalid
 {
-    public MyHandle(IntPtr ptr) : base(true)
+    private MyHandle() : base(true)
     {
-        handle = ptr;
     }
-
+    
     protected override bool ReleaseHandle()
     {
         CloseResource(handle);
